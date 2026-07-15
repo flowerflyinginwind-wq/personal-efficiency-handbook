@@ -143,6 +143,15 @@
     .weekday-chip{padding:6px 10px;font-size:.8rem;border:1px solid var(--border);border-radius:99px;background:var(--surface);color:var(--text-secondary)}
     .weekday-chip.on{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:500}
     .recurrence-select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);margin-bottom:8px}
+    .interval-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+    .interval-item{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+    .interval-item.off{opacity:.55}
+    .interval-item-body{flex:1}
+    .interval-item-title{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .interval-meta{font-size:.8rem;color:var(--text-secondary);margin-top:4px;line-height:1.5}
+    .interval-next{font-size:.8rem;color:var(--accent);margin-top:6px;font-weight:500}
+    .interval-toggle{padding:6px 12px;border-radius:99px;border:1px solid var(--border);font-size:.75rem;background:var(--surface);flex-shrink:0}
+    .interval-toggle.on{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
   </style>
 </head>
 <body>
@@ -158,10 +167,16 @@ const TASK_TEMPLATES=[
   {id:'morning',label:'🌅 晨间例行',tasks:[{title:'喝水一杯',note:''},{title:'拉伸 5 分钟',note:''},{title:'读 10 分钟',note:''}],recurrence:'daily'},
   {id:'evening',label:'🌙 晚间复盘',tasks:[{title:'回顾今日完成',note:''},{title:'写下明日计划',note:''}],recurrence:'daily'},
 ];
+const INTERVAL_PRESETS=[
+  {id:'water',label:'💧 每2小时喝水',title:'喝水',message:'记得喝杯水，保持水分',minutes:120,start:'09:00',end:'21:00'},
+  {id:'eyes',label:'👀 每30分钟看远方',title:'放松眼睛',message:'看看远处，让眼睛休息一下',minutes:30,start:'08:00',end:'20:00'},
+  {id:'stand',label:'🧍 每1小时活动',title:'起来活动',message:'站起来走动几分钟',minutes:60,start:'09:00',end:'18:00'},
+];
 const WEEKDAY_NAMES=['一','二','三','四','五','六','日'];
 const weekdayIndex=ds=>(new Date(ds+'T00:00:00').getDay()+6)%7;
 const uid=()=>crypto.randomUUID();
 const todayStr=()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`};
+const localDateStr=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const getMonthDates=(y,m)=>Array.from({length:new Date(y,m+1,0).getDate()},(_,i)=>{const d=new Date(y,m,i+1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`});
 const getWeekDates=a=>{const t=a?new Date(a+'T00:00:00'):new Date(),day=t.getDay(),mon=new Date(t);mon.setDate(t.getDate()-((day+6)%7));return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`})};
 const shiftDate=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
@@ -234,8 +249,14 @@ function formatSpecialLabel(sd){
   const[mm,dd]=sd.monthDay.split('-'),y=sd.yearly?new Date().getFullYear():(sd.year||new Date().getFullYear()),solar=sd.yearly?`每年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`:`${sd.year} 年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`;return solar+'（'+formatLunarFull(`${y}-${sd.monthDay}`)+'）'}
 function buildNotifyBody(overdue,special,today){const p=[];special.forEach(sd=>{const isT=matchesSpecial(sd,today);p.push(`${isT?'🎂':'📅 明天'} ${sd.title}${sd.message?'：'+sd.message:''}`)});if(overdue.length)p.push(`⚠️ 逾期 ${overdue.length} 项：`+overdue.map(i=>i.task.title).join('、'));return p.join('\n')||'暂无提醒'}
 function shouldNotifyNow(r){if(!r.enabled)return false;const today=todayStr();if(r.lastNotifiedDate===today)return false;const[h,m]=r.time.split(':').map(Number);const now=new Date();return now.getHours()*60+now.getMinutes()>=h*60+m}
-function sendNotify(title,body){if(!('Notification'in window)||Notification.permission!=='granted')return false;try{new Notification(title,{body,tag:'efficiency-handbook-reminder'});return true}catch{return false}}
+function sendNotify(title,body,tag='efficiency-handbook-reminder'){if(!('Notification'in window)||Notification.permission!=='granted')return false;try{new Notification(title,{body,tag});return true}catch{return false}}
 function tryNotify(){if(!shouldNotifyNow(data.reminders))return;const today=todayStr(),overdue=data.reminders.remindOverdue?getOverdueItems(data.tasks,today):[],special=getSpecialToday(data.specialDates||[],data.reminders,today);if(!overdue.length&&!special.length)return;sendNotify('🔔 效率手册提醒',buildNotifyBody(overdue,special,today));data.reminders.lastNotifiedDate=today;save()}
+function formatIntervalMin(m){if(m<60)return`每 ${m} 分钟`;if(m%60===0)return`每 ${m/60} 小时`;return`每 ${m} 分钟`}
+function timeToMin(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+function shouldIntervalNotify(iv,now=new Date()){if(!iv.enabled)return false;const wd=weekdayIndex(todayStr());if(iv.weekdays&&!iv.weekdays.includes(wd))return false;const nowMin=now.getHours()*60+now.getMinutes(),start=timeToMin(iv.startTime),end=timeToMin(iv.endTime);if(nowMin<start||nowMin>end)return false;if(!iv.lastNotifiedAt)return nowMin>=start;const last=new Date(iv.lastNotifiedAt);if(localDateStr(last)!==todayStr())return nowMin>=start;return(now.getTime()-last.getTime())/60000>=iv.intervalMinutes}
+function getNextIntervalLabel(iv){if(!iv.enabled)return'已暂停';const now=new Date(),nowMin=now.getHours()*60+now.getMinutes(),start=timeToMin(iv.startTime),end=timeToMin(iv.endTime);if(nowMin>end)return'今日时段已结束';if(nowMin<start)return`今日 ${iv.startTime} 起提醒`;if(!iv.lastNotifiedAt||localDateStr(new Date(iv.lastNotifiedAt))!==todayStr())return'等待首次提醒';const nextMs=new Date(iv.lastNotifiedAt).getTime()+iv.intervalMinutes*60000,next=new Date(nextMs);const nextMin=next.getHours()*60+next.getMinutes();if(nextMin>end)return'今日已无下次';return`下次约 ${String(next.getHours()).padStart(2,'0')}:${String(next.getMinutes()).padStart(2,'0')}`}
+function tryIntervalNotify(){if(!('Notification'in window)||Notification.permission!=='granted')return;const now=new Date();let changed=false;(data.intervalReminders||[]).forEach(iv=>{if(shouldIntervalNotify(iv,now)){if(sendNotify(`⏰ ${iv.title}`,iv.message||formatIntervalMin(iv.intervalMinutes),`efficiency-interval-${iv.id}`)){iv.lastNotifiedAt=now.toISOString();changed=true;vibrate(30)}}});if(changed)save()}
+function tryAllNotify(){tryNotify();tryIntervalNotify()}
 function alertCount(){const t=todayStr();return getOverdueItems(data.tasks,t).length+getSpecialForDate(data.specialDates||[],t).length}
 
 const today=todayStr(),tomorrow=shiftDate(today,1);
@@ -247,12 +268,13 @@ function defaultData(){return{
   rewards:{totalFlowers:0,dayRewards:[]},
   reminders:{enabled:true,time:'09:00',remindOverdue:true,specialAdvanceDays:0,lastNotifiedDate:null},
   specialDates:[{id:uid(),title:'示例纪念日',message:'今天是特别的一天，记得给重要的人发条消息。',monthDay:today.slice(5,10),yearly:true}],
+  intervalReminders:[{id:uid(),title:'喝水',message:'记得喝杯水，保持水分',intervalMinutes:120,startTime:'09:00',endTime:'21:00',enabled:true,lastNotifiedAt:null}],
   goals:[],habits:[],tools:[],sops:[],
   routines:{morning:{title:'晨间例行',items:[]},evening:{title:'晚间复盘',items:[]}},
   reviews:{weekly:[],monthly:[]},
 }}
 
-function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks.map(t=>({recurrence:null,...t})):[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates.map(s=>({isLunar:false,...s})):d.specialDates}}
+function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks.map(t=>({recurrence:null,...t})):[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates.map(s=>({isLunar:false,...s})):d.specialDates,intervalReminders:Array.isArray(p.intervalReminders)?p.intervalReminders:d.intervalReminders}}
 let data=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r)return normalizeData(JSON.parse(r))}catch(e){console.error(e)}return defaultData()})();
 let settings=(()=>{try{const r=localStorage.getItem(SETTINGS_KEY);if(r)return JSON.parse(r)}catch(e){}return{darkMode:false}})();
 let page='tasks',selectedDate=todayStr(),showForm=false,showSettings=false,showSpecialForm=false;
@@ -261,6 +283,7 @@ let editTaskId=null,editTitle='',editNote='',editPickDates=[],editRecurrence='no
 let spTitle='',spMessage='',spDate=todayStr(),spYearly=true,spIsLunar=false;
 let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
 let spCalYear=new Date().getFullYear(),spCalMonth=new Date().getMonth();
+let showIntervalForm=false,ivTitle='',ivMessage='',ivMinutes=120,ivStart='09:00',ivEnd='21:00';
 let toast=null,undoState=null,undoTimer=null;
 
 function miniCalBlock(y,m,selected,isMulti,navPrev,navNext,mode){
@@ -276,7 +299,10 @@ const saveSettings=()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify(setting
 const vibrate=ms=>{try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}};
 const showToast=(msg,undo=false)=>{toast=undo?{msg,undo:true}:msg;render();if(!undo)setTimeout(()=>{toast=null;render()},3000)};
 const showUndoToast=msg=>{clearTimeout(undoTimer);showToast(msg,true);undoTimer=setTimeout(()=>{undoState=null;toast=null;render()},5000)};
-function undoDelete(){if(!undoState)return;if(undoState.type==='task'){data.tasks.splice(undoState.index,0,undoState.item);data.rewards=recalculateRewards(data.tasks)}else if(undoState.type==='special'){data.specialDates.splice(undoState.index,0,undoState.item)}undoState=null;toast=null;save();render()}
+function undoDelete(){if(!undoState)return;if(undoState.type==='task'){data.tasks.splice(undoState.index,0,undoState.item);data.rewards=recalculateRewards(data.tasks)}else if(undoState.type==='special'){data.specialDates.splice(undoState.index,0,undoState.item)}else if(undoState.type==='interval'){data.intervalReminders.splice(undoState.index,0,undoState.item)}undoState=null;toast=null;save();render()}
+function deleteInterval(id){const idx=data.intervalReminders.findIndex(x=>x.id===id);if(idx<0)return;undoState={type:'interval',item:data.intervalReminders[idx],index:idx};data.intervalReminders=data.intervalReminders.filter(x=>x.id!==id);save();showUndoToast('已删除定时提醒')}
+function applyIntervalPreset(p){ivTitle=p.title;ivMessage=p.message;ivMinutes=p.minutes;ivStart=p.start;ivEnd=p.end;showIntervalForm=true;render()}
+function saveInterval(){if(!ivTitle.trim())return;data.intervalReminders.push({id:uid(),title:ivTitle.trim(),message:ivMessage.trim(),intervalMinutes:Math.max(5,parseInt(ivMinutes)||30),startTime:ivStart,endTime:ivEnd,enabled:true,lastNotifiedAt:null});ivTitle='';ivMessage='';ivMinutes=120;showIntervalForm=false;save();render()}
 function deleteTask(id){const idx=data.tasks.findIndex(t=>t.id===id);if(idx<0)return;undoState={type:'task',item:data.tasks[idx],index:idx};data.tasks=data.tasks.filter(t=>t.id!==id);data.rewards=recalculateRewards(data.tasks);save();showUndoToast('已删除任务')}
 function deleteSpecial(id){const idx=data.specialDates.findIndex(s=>s.id===id);if(idx<0)return;undoState={type:'special',item:data.specialDates[idx],index:idx};data.specialDates=data.specialDates.filter(s=>s.id!==id);save();showUndoToast('已删除特殊日子')}
 function buildRecurrence(type,start,days){if(type==='none')return null;if(type==='daily')return{type:'daily',start};if(type==='weekly')return{type:'weekly',start,days:days.length?days:[weekdayIndex(start)]};return{type:'monthly',start,day:parseInt(start.slice(8),10)}}
@@ -307,7 +333,7 @@ function scrollWeekToToday(){requestAnimationFrame(()=>{const el=document.queryS
 function toastHtml(){if(!toast)return'';if(typeof toast==='object'&&toast.undo)return`<div class="reward-toast">${toast.msg}<button class="toast-undo" onclick="undoDelete()">撤销</button></div>`;return`<div class="reward-toast">${toast}</div>`}
 
 const NAV=[
-  {id:'tasks',label:'任务中心',icon:'📌'},{id:'special',label:'特殊日子',icon:'🎂'},{id:'dashboard',label:'总览',icon:'📊'},
+  {id:'tasks',label:'任务',icon:'📌'},{id:'intervals',label:'定时',icon:'⏰'},{id:'special',label:'特殊',icon:'🎂'},{id:'dashboard',label:'总览',icon:'📊'},
 ];
 
 function handleToggle(taskId,schedDate){
@@ -403,6 +429,37 @@ function renderSpecial(){
     :`<button class="btn-add" onclick="showSpecialForm=true;const _d=new Date(spDate+'T00:00:00');spCalYear=_d.getFullYear();spCalMonth=_d.getMonth();render()">+ 添加特殊日子</button>`}`;
 }
 
+function renderIntervals(){
+  const ivs=data.intervalReminders||[],notifOk='Notification'in window&&Notification.permission==='granted';
+  return`${toastHtml()}
+    <header class="page-header"><h2>定时提醒</h2><p>按时间周期重复提醒，如喝水、护眼、起来活动</p></header>
+    <div class="reminder-settings-bar">
+      ${!notifOk?`<button class="btn-primary" style="font-size:.8rem;padding:6px 12px" onclick="Notification.requestPermission().then(()=>render())">允许通知</button>`:'<span class="setting-hint" style="margin:0">✅ 通知已开启</span>'}
+      <button class="btn-add" style="margin:0" onclick="const iv=data.intervalReminders[0];if(iv&&sendNotify('⏰ 测试提醒',iv.message||iv.title,'efficiency-interval-test')){showToast('已发送测试通知')}else{showToast('请先添加提醒并允许通知')}">测试通知</button>
+    </div>
+    <div class="card"><p class="setting-hint">在设定的时段内，每隔一段时间推送提醒。请允许浏览器通知；添加到主屏幕后体验更好。页面关闭后 iOS 可能无法准时提醒。</p></div>
+    <div class="card"><div class="card-title">我的定时提醒<span class="badge">${ivs.length} 个</span></div>
+      ${!ivs.length?'<p class="empty-hint">还没有定时提醒，添加一个吧</p>':`<ul class="interval-list">${ivs.map(iv=>`<li class="interval-item ${iv.enabled?'':'off'}"><button class="interval-toggle ${iv.enabled?'on':''}" onclick="const x=data.intervalReminders.find(i=>i.id==='${iv.id}');x.enabled=!x.enabled;if(!x.enabled)x.lastNotifiedAt=null;save();render()">${iv.enabled?'开':'关'}</button><div class="interval-item-body"><div class="interval-item-title">⏰ ${iv.title}<span class="repeat-tag">${formatIntervalMin(iv.intervalMinutes)}</span></div><div class="interval-meta">${iv.startTime} – ${iv.endTime}${iv.message?` · ${iv.message}`:''}</div><div class="interval-next">${getNextIntervalLabel(iv)}</div></div><button class="btn-icon" style="opacity:1" onclick="deleteInterval('${iv.id}')">✕</button></li>`).join('')}</ul>`}
+    </div>
+    ${showIntervalForm?`<div class="card"><div class="card-title">添加定时提醒</div>
+      <div class="template-chips">${INTERVAL_PRESETS.map(p=>`<button class="template-chip" onclick="applyIntervalPreset(INTERVAL_PRESETS.find(x=>x.id==='${p.id}'))">${p.label}</button>`).join('')}</div>
+      <input class="inline-input" style="margin-bottom:8px" value="${ivTitle}" oninput="ivTitle=this.value" placeholder="提醒名称，如：喝水" autofocus>
+      <input class="inline-input" style="margin-bottom:8px" value="${ivMessage}" oninput="ivMessage=this.value" placeholder="提醒内容（可选）">
+      <div class="setting-row"><label>提醒间隔</label><select class="recurrence-select" style="width:auto;margin:0" onchange="ivMinutes=Number(this.value);render()">
+        <option value="15" ${ivMinutes===15?'selected':''}>每 15 分钟</option>
+        <option value="30" ${ivMinutes===30?'selected':''}>每 30 分钟</option>
+        <option value="45" ${ivMinutes===45?'selected':''}>每 45 分钟</option>
+        <option value="60" ${ivMinutes===60?'selected':''}>每 1 小时</option>
+        <option value="90" ${ivMinutes===90?'selected':''}>每 1.5 小时</option>
+        <option value="120" ${ivMinutes===120?'selected':''}>每 2 小时</option>
+        <option value="180" ${ivMinutes===180?'selected':''}>每 3 小时</option>
+      </select></div>
+      <div class="setting-row"><label>开始时间</label><input type="time" value="${ivStart}" onchange="ivStart=this.value;render()"></div>
+      <div class="setting-row"><label>结束时间</label><input type="time" value="${ivEnd}" onchange="ivEnd=this.value;render()"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" onclick="saveInterval()">保存</button><button class="btn-danger" onclick="showIntervalForm=false;render()">取消</button></div></div>`
+    :`<button class="btn-add" onclick="showIntervalForm=true;render()">+ 添加定时提醒</button>`}`;
+}
+
 function renderDashboard(){
   const today=todayStr(),ts=getDayStats(data.tasks,today);
   const weekDays=Array.from({length:7},(_,i)=>shiftDate(today,-6+i));
@@ -421,19 +478,21 @@ function renderDashboard(){
     ${upcoming.length?`<div class="card"><div class="card-title">即将到来<span class="badge">${upcoming.length}</span></div><ul class="upcoming-special">${upcoming.map(({sd,date,daysAway})=>`<li><div class="upcoming-special-date">${daysAway} 天后 · ${formatShortDate(date)}</div><div class="upcoming-special-title">${sd.title}${sd.isLunar?'<span class="lunar-tag">农历</span>':''}</div>${sd.message?`<div class="upcoming-special-msg">${sd.message}</div>`:''}</li>`).join('')}</ul></div>`:'<div class="card"><div class="card-title">即将到来</div><p class="empty-hint">未来 7 天没有特殊日子</p></div>'}
     <div class="card"><div class="card-title">快捷入口</div><div class="quick-links">
       <button class="quick-link" onclick="page='tasks';render()"><div style="font-size:1.5rem">📌</div><div>今日任务打卡</div></button>
+      <button class="quick-link" onclick="page='intervals';render()"><div style="font-size:1.5rem">⏰</div><div>定时提醒</div></button>
       <button class="quick-link" onclick="page='special';render()"><div style="font-size:1.5rem">🎂</div><div>特殊日子</div></button>
       <button class="quick-link" onclick="settings.darkMode=!settings.darkMode;saveSettings();render()"><div style="font-size:1.5rem">${settings.darkMode?'☀️':'🌙'}</div><div>${settings.darkMode?'浅色模式':'深色模式'}</div></button>
     </div></div>`;
 }
 
-const pages={tasks:renderTasks,special:renderSpecial,dashboard:renderDashboard};
+const pages={tasks:renderTasks,intervals:renderIntervals,special:renderSpecial,dashboard:renderDashboard};
 
 function render(){
   try{
-  const today=todayStr(),od=getOverdueItems(data.tasks,today).length,sp=getSpecialForDate(data.specialDates||[],today).length,ac=od+sp;
+  const today=todayStr(),od=getOverdueItems(data.tasks,today).length,sp=getSpecialForDate(data.specialDates||[],today).length;
+  const activeIv=(data.intervalReminders||[]).filter(x=>x.enabled).length,ac=od+sp;
   document.getElementById('app').innerHTML=`
     <aside class="sidebar"><div class="sidebar-brand"><h1>效率手册</h1><p>Personal Efficiency Handbook</p></div>
-      <nav>${NAV.map(n=>`<button class="nav-item ${page===n.id?'active':''}" onclick="page='${n.id}';render()"><span class="nav-icon">${n.icon}</span><span>${n.label}</span>${n.id==='special'&&sp>0?`<span class="nav-badge">${sp}</span>`:''}${n.id==='tasks'&&od>0?`<span class="nav-badge">${od}</span>`:''}</button>`).join('')}</nav>
+      <nav>${NAV.map(n=>`<button class="nav-item ${page===n.id?'active':''}" onclick="page='${n.id}';render()"><span class="nav-icon">${n.icon}</span><span>${n.label}</span>${n.id==='special'&&sp>0?`<span class="nav-badge">${sp}</span>`:''}${n.id==='tasks'&&od>0?`<span class="nav-badge">${od}</span>`:''}${n.id==='intervals'&&activeIv>0?`<span class="nav-badge" style="background:var(--accent)">${activeIv}</span>`:''}</button>`).join('')}</nav>
       <div class="sidebar-footer"><button class="theme-toggle" onclick="settings.darkMode=!settings.darkMode;saveSettings();render()">${settings.darkMode?'☀️ 浅色模式':'🌙 深色模式'}</button><button class="btn-reset" onclick="if(confirm('恢复默认？')){data=defaultData();save();render()}">恢复默认数据</button></div>
     </aside><main class="main">${ac>0&&page!=='tasks'&&page!=='special'?`<button class="reminder-bar" onclick="page='special';render()">🔔 ${sp>0?getSpecialForDate(data.specialDates,today).map(s=>s.title).join('、'):''}${sp>0&&od>0?' · ':''}${od>0?`逾期 ${od} 项任务`:''}</button>`:''}${(pages[page]||renderTasks)()}</main>`;
   if(page==='tasks')scrollWeekToToday();
@@ -442,8 +501,8 @@ function render(){
 document.documentElement.setAttribute('data-theme',settings.darkMode?'dark':'light');
 saveSettings();
 render();
-tryNotify();
-setInterval(tryNotify,60000);
+tryAllNotify();
+setInterval(tryAllNotify,30000);
 </script>
 </body>
 </html>

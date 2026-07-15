@@ -14,6 +14,18 @@ export interface TaskCompletion {
   completedDate: string
 }
 
+export interface IntervalReminder {
+  id: string
+  title: string
+  message: string
+  intervalMinutes: number
+  startTime: string
+  endTime: string
+  enabled: boolean
+  lastNotifiedAt: string | null
+  weekdays?: number[]
+}
+
 export interface TaskRecurrence {
   type: 'daily' | 'weekly' | 'monthly'
   start: string
@@ -130,6 +142,7 @@ export interface HandbookData {
   rewards: TaskRewards
   reminders: ReminderSettings
   specialDates: SpecialDate[]
+  intervalReminders: IntervalReminder[]
   routines: {
     morning: RoutineSection
     evening: RoutineSection
