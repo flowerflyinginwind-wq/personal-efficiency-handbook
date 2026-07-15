@@ -1,5 +1,5 @@
 import type { Task, ReminderSettings, PendingItem, SpecialDate } from '../types'
-import { isCompletedOn } from './tasks'
+import { isCompletedOn, taskAppliesOnDate, shiftDate } from './tasks'
 import { formatLunarFull, formatLunarMonthDay, findSolarForLunar, solarToLunar } from './lunar'
 
 export const DEFAULT_REMINDERS: ReminderSettings = {
@@ -109,9 +109,19 @@ export function getPendingForDate(tasks: Task[], date: string): PendingItem[] {
 export function getOverdueItems(tasks: Task[], today: string): PendingItem[] {
   const items: PendingItem[] = []
   for (const task of tasks) {
-    for (const d of task.scheduledDates) {
-      if (d < today && !isCompletedOn(task, d)) {
-        items.push({ task, scheduledDate: d })
+    if (task.recurrence) {
+      let d = task.recurrence.start
+      while (d < today) {
+        if (taskAppliesOnDate(task, d) && !isCompletedOn(task, d)) {
+          items.push({ task, scheduledDate: d })
+        }
+        d = shiftDate(d, 1)
+      }
+    } else {
+      for (const d of task.scheduledDates) {
+        if (d < today && !isCompletedOn(task, d)) {
+          items.push({ task, scheduledDate: d })
+        }
       }
     }
   }

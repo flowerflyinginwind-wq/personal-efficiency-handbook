@@ -138,6 +138,11 @@
     .upcoming-special-title{font-weight:500;margin-top:2px}
     .upcoming-special-msg{font-size:.8rem;color:var(--text-secondary);margin-top:4px}
     .lunar-tag{font-size:.7rem;padding:2px 8px;border-radius:99px;background:var(--accent-light);color:var(--accent);margin-left:6px}
+    .repeat-tag{font-size:.7rem;padding:2px 8px;border-radius:99px;background:#ede9fe;color:#7c3aed;width:fit-content;margin-top:4px}
+    .weekday-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+    .weekday-chip{padding:6px 10px;font-size:.8rem;border:1px solid var(--border);border-radius:99px;background:var(--surface);color:var(--text-secondary)}
+    .weekday-chip.on{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:500}
+    .recurrence-select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);margin-bottom:8px}
   </style>
 </head>
 <body>
@@ -149,10 +154,12 @@ const TARGET_RATE=0.8;
 const SOLAR_HOLIDAYS={'01-01':'元旦','05-01':'劳动','10-01':'国庆'};
 const LUNAR_HOLIDAYS={'1-1':'春节','1-15':'元宵','2-2':'龙头','5-5':'端午','7-7':'七夕','8-15':'中秋','9-9':'重阳','12-8':'腊八'};
 const TASK_TEMPLATES=[
-  {id:'three',label:'📋 每日三件要事',tasks:[{title:'要事一',note:'最重要'},{title:'要事二',note:''},{title:'要事三',note:''}]},
-  {id:'morning',label:'🌅 晨间例行',tasks:[{title:'喝水一杯',note:''},{title:'拉伸 5 分钟',note:''},{title:'读 10 分钟',note:''}]},
-  {id:'evening',label:'🌙 晚间复盘',tasks:[{title:'回顾今日完成',note:''},{title:'写下明日计划',note:''}]},
+  {id:'three',label:'📋 每日三件要事',tasks:[{title:'要事一',note:'最重要'},{title:'要事二',note:''},{title:'要事三',note:''}],recurrence:'daily'},
+  {id:'morning',label:'🌅 晨间例行',tasks:[{title:'喝水一杯',note:''},{title:'拉伸 5 分钟',note:''},{title:'读 10 分钟',note:''}],recurrence:'daily'},
+  {id:'evening',label:'🌙 晚间复盘',tasks:[{title:'回顾今日完成',note:''},{title:'写下明日计划',note:''}],recurrence:'daily'},
 ];
+const WEEKDAY_NAMES=['一','二','三','四','五','六','日'];
+const weekdayIndex=ds=>(new Date(ds+'T00:00:00').getDay()+6)%7;
 const uid=()=>crypto.randomUUID();
 const todayStr=()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`};
 const getMonthDates=(y,m)=>Array.from({length:new Date(y,m+1,0).getDate()},(_,i)=>{const d=new Date(y,m,i+1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`});
@@ -181,13 +188,40 @@ const weekdayLabel=s=>new Date(s+'T00:00:00').toLocaleDateString('zh-CN',{weekda
 const formatShortDate=s=>{const d=new Date(s+'T00:00:00');return d.toLocaleDateString('zh-CN',{month:'short',day:'numeric',weekday:'short'})+'（'+formatLunarFull(s)+'）'};
 
 function isCompletedOn(t,d){return t.completions.some(c=>c.scheduledDate===d)}
-function getTasksForDate(tasks,d){return tasks.filter(t=>t.scheduledDates.includes(d))}
-function getDayStats(tasks,d){const day=getTasksForDate(tasks,d),total=day.length,done=day.filter(t=>isCompletedOn(t,d)).length,rate=total?done/total:0,ahead=tasks.filter(t=>t.completions.some(c=>c.completedDate===d&&c.scheduledDate>d)).length;return{total,done,rate,ahead}}
+function taskAppliesOnDate(t,d){
+  if(t.scheduledDates&&t.scheduledDates.includes(d))return true;
+  const r=t.recurrence;if(!r)return false;
+  if(d<r.start)return false;
+  if(r.end&&d>r.end)return false;
+  if(r.type==='daily')return true;
+  if(r.type==='weekly')return(r.days||[]).includes(weekdayIndex(d));
+  if(r.type==='monthly')return parseInt(d.slice(8),10)===(r.day||parseInt(r.start.slice(8),10));
+  return false;
+}
+function getTasksForDate(tasks,d){return tasks.filter(t=>taskAppliesOnDate(t,d))}
+function getNextOccurrence(t,after){for(let i=1;i<=366;i++){const d=shiftDate(after,i);if(taskAppliesOnDate(t,d)&&!isCompletedOn(t,d))return d}return null}
+function formatRecurrence(t){
+  const r=t.recurrence;if(!r)return'';
+  if(r.type==='daily')return'每天';
+  if(r.type==='weekly')return'每周'+((r.days||[]).sort((a,b)=>a-b).map(i=>'周'+WEEKDAY_NAMES[i]).join(''));
+  if(r.type==='monthly')return`每月 ${r.day||parseInt(r.start.slice(8),10)} 日`;
+  return'';
+}
+function collectDatesForTasks(tasks,to){
+  const dates=new Set(),from=tasks.reduce((m,t)=>{const s=t.recurrence?.start||t.scheduledDates?.[0]||to;return s<m?s:m},to);
+  let d=from;while(d<=to){tasks.forEach(t=>{if(taskAppliesOnDate(t,d))dates.add(d)});d=shiftDate(d,1)}
+  tasks.forEach(t=>{t.scheduledDates?.forEach(x=>dates.add(x));t.completions.forEach(c=>{dates.add(c.scheduledDate);dates.add(c.completedDate)})});
+  return dates;
+}
+function getDayStats(tasks,d){const day=getTasksForDate(tasks,d),total=day.length,done=day.filter(t=>isCompletedOn(t,d)).length,rate=total?done/total:0,ahead=tasks.filter(t=>{const n=getNextOccurrence(t,d);return n&&n>d&&t.completions.some(c=>c.scheduledDate===n&&c.completedDate===d)}).length;return{total,done,rate,ahead}}
 function evaluateDayReward(tasks,d){const{total,done,rate,ahead}=getDayStats(tasks,d),reasons=[];let flowers=0;if(total===0&&ahead===0)return{date:d,flowers:0,reasons:[]};if(total>0&&rate>=1){flowers++;reasons.push('今日任务全部完成')}else if(total>0&&rate>=TARGET_RATE){flowers++;reasons.push(`完成度达 ${Math.round(rate*100)}%，达标`)}if(ahead>0){flowers+=ahead;reasons.push(`超前完成 ${ahead} 项任务`)}return{date:d,flowers,reasons}}
-function recalculateRewards(tasks){const dates=new Set();tasks.forEach(t=>{t.scheduledDates.forEach(d=>dates.add(d));t.completions.forEach(c=>{dates.add(c.scheduledDate);dates.add(c.completedDate)})});const dayRewards=[...dates].sort().map(d=>evaluateDayReward(tasks,d)).filter(r=>r.flowers>0);return{totalFlowers:dayRewards.reduce((s,r)=>s+r.flowers,0),dayRewards}}
+function recalculateRewards(tasks){const today=todayStr(),dates=collectDatesForTasks(tasks,shiftDate(today,7));const dayRewards=[...dates].sort().map(d=>evaluateDayReward(tasks,d)).filter(r=>r.flowers>0);return{totalFlowers:dayRewards.reduce((s,r)=>s+r.flowers,0),dayRewards}}
 function toggleCompletion(task,sched,action){const ex=task.completions.find(c=>c.scheduledDate===sched);if(ex)return{...task,completions:task.completions.filter(c=>c.scheduledDate!==sched)};return{...task,completions:[...task.completions,{scheduledDate:sched,completedDate:action}]}}
 
-function getOverdueItems(tasks,today){const items=[];tasks.forEach(t=>{t.scheduledDates.forEach(d=>{if(d<today&&!isCompletedOn(t,d))items.push({task:t,scheduledDate:d})})});return items.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate))}
+function getOverdueItems(tasks,today){const items=[];tasks.forEach(t=>{
+  if(t.recurrence){let d=t.recurrence.start;while(d<today){if(taskAppliesOnDate(t,d)&&!isCompletedOn(t,d))items.push({task:t,scheduledDate:d});d=shiftDate(d,1)}}
+  else t.scheduledDates.forEach(d=>{if(d<today&&!isCompletedOn(t,d))items.push({task:t,scheduledDate:d})});
+});return items.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate))}
 function toMonthDay(d){return d.slice(5,10)}
 function matchesSpecial(sd,dateStr){
   if(sd.isLunar){const l=solarToLunar(dateStr),[lm,ld]=sd.monthDay.split('-').map(Number);if(sd.yearly)return l.month===lm&&l.day===ld&&!l.isLeap;return l.year===(sd.year||0)&&l.month===lm&&l.day===ld&&!l.isLeap}
@@ -218,13 +252,13 @@ function defaultData(){return{
   reviews:{weekly:[],monthly:[]},
 }}
 
-function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks:[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates.map(s=>({isLunar:false,...s})):d.specialDates}}
+function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks.map(t=>({recurrence:null,...t})):[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates.map(s=>({isLunar:false,...s})):d.specialDates}}
 let data=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r)return normalizeData(JSON.parse(r))}catch(e){console.error(e)}return defaultData()})();
 let settings=(()=>{try{const r=localStorage.getItem(SETTINGS_KEY);if(r)return JSON.parse(r)}catch(e){}return{darkMode:false}})();
 let page='tasks',selectedDate=todayStr(),showForm=false,showSettings=false,showSpecialForm=false;
-let formTitle='',formNote='',pickDates=[todayStr()];
+let formTitle='',formNote='',pickDates=[todayStr()],formRecurrence='none',formWeekdays=[weekdayIndex(todayStr())];
+let editTaskId=null,editTitle='',editNote='',editPickDates=[],editRecurrence='none',editWeekdays=[],editCalYear=new Date().getFullYear(),editCalMonth=new Date().getMonth();
 let spTitle='',spMessage='',spDate=todayStr(),spYearly=true,spIsLunar=false;
-let editTaskId=null,editTitle='',editNote='',editPickDates=[],editCalYear=new Date().getFullYear(),editCalMonth=new Date().getMonth();
 let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
 let spCalYear=new Date().getFullYear(),spCalMonth=new Date().getMonth();
 let toast=null,undoState=null,undoTimer=null;
@@ -232,7 +266,7 @@ let toast=null,undoState=null,undoTimer=null;
 function miniCalBlock(y,m,selected,isMulti,navPrev,navNext,mode){
   const monthDates=getMonthDates(y,m),firstDow=new Date(y,m,1).getDay(),pad=(firstDow+6)%7;
   const picked=d=>isMulti?selected.includes(d):d===selected;
-  const click=d=>mode==='edit'?`editPickDates.includes('${d}')?editPickDates=editPickDates.filter(x=>x!=='${d}'):editPickDates=[...editPickDates,'${d}'].sort();render()`:mode==='sp'?`spDate='${d}';render()`:isMulti?`pickDates.includes('${d}')?pickDates=pickDates.filter(x=>x!=='${d}'):pickDates=[...pickDates,'${d}'].sort();render()`:`spDate='${d}';render()`;
+  const click=d=>mode==='edit'?`editPickDates.includes('${d}')?editPickDates=editPickDates.filter(x=>x!=='${d}'):editPickDates=[...editPickDates,'${d}'].sort();render()`:mode==='editStart'?`editPickDates=['${d}'];render()`:mode==='formStart'?`pickDates=['${d}'];render()`:mode==='sp'?`spDate='${d}';render()`:isMulti?`pickDates.includes('${d}')?pickDates=pickDates.filter(x=>x!=='${d}'):pickDates=[...pickDates,'${d}'].sort();render()`:`spDate='${d}';render()`;
   return `<div class="mini-cal-nav"><button onclick="${navPrev}">‹</button><span>${y} 年 ${m+1} 月<span class="cal-lunar-range">农历 ${formatSolarMonthLunarRange(y,m)}</span></span><button onclick="${navNext}">›</button></div>
     <div class="mini-cal">${['一','二','三','四','五','六','日'].map(w=>`<span class="mini-cal-head">${w}</span>`).join('')}${Array(pad).fill('<span></span>').join('')}${monthDates.map(d=>{const h=getHoliday(d);return`<button class="mini-cal-day ${picked(d)?'picked':''} ${d===todayStr()?'today':''} ${h?'has-holiday':''}" onclick="${click(d)}"><span class="cal-solar">${parseInt(d.slice(8))}</span><span class="cal-lunar">${formatLunarCell(d)}</span>${h?`<span class="cal-holiday">${h}</span>`:''}</button>`}).join('')}</div>`;
 }
@@ -245,10 +279,30 @@ const showUndoToast=msg=>{clearTimeout(undoTimer);showToast(msg,true);undoTimer=
 function undoDelete(){if(!undoState)return;if(undoState.type==='task'){data.tasks.splice(undoState.index,0,undoState.item);data.rewards=recalculateRewards(data.tasks)}else if(undoState.type==='special'){data.specialDates.splice(undoState.index,0,undoState.item)}undoState=null;toast=null;save();render()}
 function deleteTask(id){const idx=data.tasks.findIndex(t=>t.id===id);if(idx<0)return;undoState={type:'task',item:data.tasks[idx],index:idx};data.tasks=data.tasks.filter(t=>t.id!==id);data.rewards=recalculateRewards(data.tasks);save();showUndoToast('已删除任务')}
 function deleteSpecial(id){const idx=data.specialDates.findIndex(s=>s.id===id);if(idx<0)return;undoState={type:'special',item:data.specialDates[idx],index:idx};data.specialDates=data.specialDates.filter(s=>s.id!==id);save();showUndoToast('已删除特殊日子')}
-function startEditTask(t){editTaskId=t.id;editTitle=t.title;editNote=t.note||'';editPickDates=[...t.scheduledDates];const d=new Date((t.scheduledDates[0]||todayStr())+'T00:00:00');editCalYear=d.getFullYear();editCalMonth=d.getMonth();showForm=false;render()}
+function buildRecurrence(type,start,days){if(type==='none')return null;if(type==='daily')return{type:'daily',start};if(type==='weekly')return{type:'weekly',start,days:days.length?days:[weekdayIndex(start)]};return{type:'monthly',start,day:parseInt(start.slice(8),10)}}
+function recurrenceHtml(prefix,type,weekdays){
+  const p=prefix,wd=weekdays||[];
+  return`<div class="card-title" style="font-size:.9rem;margin-top:4px">重复</div>
+    <select class="recurrence-select" onchange="${p}Recurrence=this.value;render()">
+      <option value="none" ${type==='none'?'selected':''}>不重复</option>
+      <option value="daily" ${type==='daily'?'selected':''}>每天</option>
+      <option value="weekly" ${type==='weekly'?'selected':''}>每周</option>
+      <option value="monthly" ${type==='monthly'?'selected':''}>每月</option>
+    </select>
+    ${type==='weekly'?`<div class="weekday-chips">${WEEKDAY_NAMES.map((w,i)=>`<button class="weekday-chip ${wd.includes(i)?'on':''}" onclick="${p}Weekdays=${p}Weekdays.includes(${i})?${p}Weekdays.filter(x=>x!==${i}):[...${p}Weekdays,${i}].sort();render()">周${w}</button>`).join('')}</div>`:''}
+    ${type!=='none'?`<p class="pick-dates-hint">${type==='monthly'?'每月 '+parseInt((prefix==='form'?pickDates[0]:editPickDates[0]||selectedDate).slice(8),10)+' 日重复':'从所选日期开始重复'}</p>`:''}`;
+}
+function startEditTask(t){editTaskId=t.id;editTitle=t.title;editNote=t.note||'';editRecurrence=t.recurrence?.type||'none';editWeekdays=t.recurrence?.days?[...t.recurrence.days]:[weekdayIndex(selectedDate)];if(t.recurrence){editPickDates=[t.recurrence.start]}else{editPickDates=[...t.scheduledDates]}const d=new Date((editPickDates[0]||todayStr())+'T00:00:00');editCalYear=d.getFullYear();editCalMonth=d.getMonth();showForm=false;render()}
+function saveEditTask(){
+  if(!editTaskId||!editTitle.trim())return;
+  const start=(editPickDates[0]||selectedDate),rec=buildRecurrence(editRecurrence,start,editWeekdays);
+  if(!rec&&!editPickDates.length)return;
+  data.tasks=data.tasks.map(t=>t.id===editTaskId?{...t,title:editTitle.trim(),note:editNote.trim(),recurrence:rec,scheduledDates:rec?[]:[...editPickDates].sort()}:t);
+  data.rewards=recalculateRewards(data.tasks);editTaskId=null;save();render();
+}
+function applyTemplate(tpl){const td=todayStr(),rec=tpl.recurrence?buildRecurrence(tpl.recurrence,td,[weekdayIndex(td)]):null;tpl.tasks.forEach(x=>{data.tasks.push({id:uid(),title:x.title,note:x.note||'',scheduledDates:rec?[]:[td],recurrence:rec,completions:[],createdAt:td})});data.rewards=recalculateRewards(data.tasks);save();showToast(`已添加 ${tpl.tasks.length} 项${rec?'每日':''}任务`);render()}
+function createTask(){if(!formTitle.trim())return;const start=pickDates[0]||selectedDate,rec=buildRecurrence(formRecurrence,start,formWeekdays);if(!rec&&!pickDates.length)return;data.tasks.push({id:uid(),title:formTitle.trim(),note:formNote.trim(),scheduledDates:rec?[]:[...pickDates].sort(),recurrence:rec,completions:[],createdAt:todayStr()});data.rewards=recalculateRewards(data.tasks);formTitle='';formNote='';pickDates=[selectedDate];formRecurrence='none';formWeekdays=[weekdayIndex(selectedDate)];showForm=false;save();render()}
 function startEditTaskById(id){const t=data.tasks.find(x=>x.id===id);if(t)startEditTask(t)}
-function saveEditTask(){if(!editTaskId||!editTitle.trim()||!editPickDates.length)return;data.tasks=data.tasks.map(t=>t.id===editTaskId?{...t,title:editTitle.trim(),note:editNote.trim(),scheduledDates:[...editPickDates].sort()}:t);data.rewards=recalculateRewards(data.tasks);editTaskId=null;save();render()}
-function applyTemplate(tpl){const td=todayStr();tpl.tasks.forEach(x=>{data.tasks.push({id:uid(),title:x.title,note:x.note||'',scheduledDates:[td],completions:[],createdAt:td})});data.rewards=recalculateRewards(data.tasks);save();showToast(`已添加 ${tpl.tasks.length} 项任务`);render()}
 function scrollWeekToToday(){requestAnimationFrame(()=>{const el=document.querySelector('.week-day.today'),strip=document.querySelector('.week-strip');if(el&&strip)el.scrollIntoView({inline:'center',behavior:'smooth'})})}
 function toastHtml(){if(!toast)return'';if(typeof toast==='object'&&toast.undo)return`<div class="reward-toast">${toast.msg}<button class="toast-undo" onclick="undoDelete()">撤销</button></div>`;return`<div class="reward-toast">${toast}</div>`}
 
@@ -268,7 +322,7 @@ function handleToggle(taskId,schedDate){
 
 function renderTasks(){
   const today=todayStr(),week=getWeekDates(selectedDate),dayTasks=getTasksForDate(data.tasks,selectedDate),stats=getDayStats(data.tasks,selectedDate),dayReward=evaluateDayReward(data.tasks,selectedDate);
-  const aheadTasks=data.tasks.filter(t=>!t.scheduledDates.includes(selectedDate)&&t.scheduledDates.some(d=>d>selectedDate&&!isCompletedOn(t,d)));
+  const aheadTasks=data.tasks.filter(t=>!taskAppliesOnDate(t,selectedDate)).map(t=>{const nd=getNextOccurrence(t,selectedDate);return nd?{task:t,date:nd}:null}).filter(Boolean);
   const overdue=getOverdueItems(data.tasks,today);
 
   return `${toastHtml()}
@@ -293,26 +347,25 @@ function renderTasks(){
     <div class="card"><div class="card-title">${selectedDate===todayStr()?'今日任务':formatShortDate(selectedDate)+' 的任务'}<span class="badge">${dayTasks.length} 项</span></div>
       ${dayTasks.length===0?'<p class="empty-hint">这一天还没有任务，点击下方添加</p>':`<ul class="task-list">${dayTasks.map(t=>{
         const done=isCompletedOn(t,selectedDate),comp=t.completions.find(c=>c.scheduledDate===selectedDate),early=done&&comp&&comp.completedDate<selectedDate;
-        if(editTaskId===t.id)return`<li class="task-item" style="flex-direction:column;align-items:stretch"><input class="inline-input" style="margin-bottom:8px" value="${editTitle}" oninput="editTitle=this.value" placeholder="任务名称"><input class="inline-input" style="margin-bottom:8px" value="${editNote}" oninput="editNote=this.value" placeholder="备注"><div class="card-title" style="font-size:.85rem">修改日期</div>${miniCalBlock(editCalYear,editCalMonth,editPickDates,true,'editCalMonth--;if(editCalMonth<0){editCalMonth=11;editCalYear--}render()','editCalMonth++;if(editCalMonth>11){editCalMonth=0;editCalYear++}render()','edit')}
+        if(editTaskId===t.id)return`<li class="task-item" style="flex-direction:column;align-items:stretch"><input class="inline-input" style="margin-bottom:8px" value="${editTitle}" oninput="editTitle=this.value" placeholder="任务名称"><input class="inline-input" style="margin-bottom:8px" value="${editNote}" oninput="editNote=this.value" placeholder="备注">${recurrenceHtml('edit',editRecurrence,editWeekdays)}<div class="card-title" style="font-size:.85rem">${editRecurrence==='none'?'修改日期（可多选）':'开始日期'}</div>${miniCalBlock(editCalYear,editCalMonth,editPickDates,editRecurrence==='none','editCalMonth--;if(editCalMonth<0){editCalMonth=11;editCalYear--}render()','editCalMonth++;if(editCalMonth>11){editCalMonth=0;editCalYear++}render()',editRecurrence==='none'?'edit':'editStart')}
         <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-primary" onclick="saveEditTask()">保存</button><button class="btn-danger" onclick="editTaskId=null;render()">取消</button></div></li>`;
         return`<li class="task-item ${done?'done':''}"><input type="checkbox" ${done?'checked':''} onchange="handleToggle('${t.id}','${selectedDate}')">
-          <div class="task-item-body"><span class="task-item-title">${t.title}</span>${t.note?`<span class="task-item-note">${t.note}</span>`:''}${early?'<span class="task-ahead-tag">超前完成</span>':''}</div>
+          <div class="task-item-body"><span class="task-item-title">${t.title}</span>${t.note?`<span class="task-item-note">${t.note}</span>`:''}${t.recurrence?`<span class="repeat-tag">🔁 ${formatRecurrence(t)}</span>`:''}${early?'<span class="task-ahead-tag">超前完成</span>':''}</div>
           <button class="btn-edit" onclick="startEditTaskById('${t.id}')">编辑</button>
           <button class="btn-icon" onclick="deleteTask('${t.id}')">✕</button></li>`}).join('')}</ul>`}
     </div>
-    ${aheadTasks.length?`<div class="card"><div class="card-title">可提前完成<span class="badge">超前有 🌸</span></div><ul class="task-list">${aheadTasks.map(t=>{
-      const nd=t.scheduledDates.filter(d=>d>selectedDate&&!isCompletedOn(t,d)).sort()[0];if(!nd)return'';
-      return`<li class="task-item"><input type="checkbox" onchange="handleToggle('${t.id}','${nd}')"><div class="task-item-body"><span class="task-item-title">${t.title}</span><span class="task-item-note">原定 ${formatShortDate(nd)}</span></div></li>`}).join('')}</ul></div>`:''}
+    ${aheadTasks.length?`<div class="card"><div class="card-title">可提前完成<span class="badge">超前有 🌸</span></div><ul class="task-list">${aheadTasks.map(({task:t,date:nd})=>`<li class="task-item"><input type="checkbox" onchange="handleToggle('${t.id}','${nd}')"><div class="task-item-body"><span class="task-item-title">${t.title}</span><span class="task-item-note">原定 ${formatShortDate(nd)}</span></div></li>`).join('')}</ul></div>`:''}
     ${showForm?`<div class="card"><div class="card-title">新建任务</div>
       <div class="template-chips">${TASK_TEMPLATES.map(t=>`<button class="template-chip" onclick="applyTemplate(TASK_TEMPLATES.find(x=>x.id==='${t.id}'))">${t.label}</button>`).join('')}</div>
       <input class="inline-input" style="margin-bottom:8px" value="${formTitle}" oninput="formTitle=this.value" placeholder="任务名称" autofocus>
       <input class="inline-input" style="margin-bottom:12px" value="${formNote}" oninput="formNote=this.value" placeholder="备注（可选）">
-      <div class="card-title" style="font-size:.9rem">选择日期（点击多选）</div>
-      ${miniCalBlock(calYear,calMonth,pickDates,true,'calMonth--;if(calMonth<0){calMonth=11;calYear--}render()','calMonth++;if(calMonth>11){calMonth=0;calYear++}render()')}
-      ${pickDates.length?`<p class="pick-dates-hint">已选 ${pickDates.length} 天</p>`:''}
-      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" onclick="if(formTitle.trim()&&pickDates.length){data.tasks.push({id:uid(),title:formTitle.trim(),note:formNote.trim(),scheduledDates:[...pickDates].sort(),completions:[],createdAt:todayStr()});data.rewards=recalculateRewards(data.tasks);formTitle='';formNote='';pickDates=[selectedDate];showForm=false;save();render()}">创建任务</button>
+      ${recurrenceHtml('form',formRecurrence,formWeekdays)}
+      <div class="card-title" style="font-size:.9rem">${formRecurrence==='none'?'选择日期（点击多选）':'开始日期'}</div>
+      ${miniCalBlock(calYear,calMonth,pickDates,formRecurrence==='none','calMonth--;if(calMonth<0){calMonth=11;calYear--}render()','calMonth++;if(calMonth>11){calMonth=0;calYear++}render()',formRecurrence==='none'?undefined:'formStart')}
+      ${formRecurrence==='none'&&pickDates.length?`<p class="pick-dates-hint">已选 ${pickDates.length} 天</p>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" onclick="createTask()">创建任务</button>
       <button class="btn-danger" onclick="showForm=false;render()">取消</button></div></div>`
-    :`<button class="btn-add" onclick="showForm=true;pickDates=[selectedDate];render()">+ 新建任务</button>`}
+    :`<button class="btn-add" onclick="showForm=true;pickDates=[selectedDate];formRecurrence='none';formWeekdays=[weekdayIndex(selectedDate)];render()">+ 新建任务</button>`}
     ${data.rewards.dayRewards.length?`<div class="card" style="margin-top:24px"><div class="card-title">红花记录</div><ul class="reward-history">${[...data.rewards.dayRewards].reverse().slice(0,10).map(r=>`<li><span class="reward-date">${formatShortDate(r.date)}</span><span>${'🌸'.repeat(r.flowers)}</span><span class="reward-reason">${r.reasons.join('、')}</span></li>`).join('')}</ul></div>`:''}`;
 }
 

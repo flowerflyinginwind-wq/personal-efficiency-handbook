@@ -14,6 +14,14 @@ export interface TaskCompletion {
   completedDate: string
 }
 
+export interface TaskRecurrence {
+  type: 'daily' | 'weekly' | 'monthly'
+  start: string
+  end?: string
+  days?: number[]
+  day?: number
+}
+
 export interface Task {
   id: string
   title: string
@@ -21,6 +29,7 @@ export interface Task {
   scheduledDates: string[]
   completions: TaskCompletion[]
   createdAt: string
+  recurrence?: TaskRecurrence | null
 }
 
 export interface DayReward {
