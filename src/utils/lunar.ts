@@ -157,3 +157,50 @@ export function formatSolarMonthLunarRange(year: number, month: number): string 
   const m2 = lunarMonthName(l2.month, l2.isLeap)
   return m1 === m2 ? m1 : `${m1}～${m2}`
 }
+
+const SOLAR_HOLIDAYS: Record<string, string> = {
+  '01-01': '元旦',
+  '05-01': '劳动',
+  '10-01': '国庆',
+}
+
+const LUNAR_HOLIDAYS: Record<string, string> = {
+  '1-1': '春节',
+  '1-15': '元宵',
+  '2-2': '龙头',
+  '5-5': '端午',
+  '7-7': '七夕',
+  '8-15': '中秋',
+  '9-9': '重阳',
+  '12-8': '腊八',
+}
+
+export function getHoliday(dateStr: string): string | null {
+  const solar = SOLAR_HOLIDAYS[dateStr.slice(5, 10)]
+  if (solar) return solar
+  const lunar = solarToLunar(dateStr)
+  if (lunar.isLeap) return null
+  return LUNAR_HOLIDAYS[`${lunar.month}-${lunar.day}`] ?? null
+}
+
+export function lunarMonthDayFromSolar(dateStr: string): string {
+  const lunar = solarToLunar(dateStr)
+  return `${String(lunar.month).padStart(2, '0')}-${String(lunar.day).padStart(2, '0')}`
+}
+
+export function formatLunarMonthDay(monthDay: string): string {
+  const [lm, ld] = monthDay.split('-').map(Number)
+  return `${lunarMonthName(lm, false)}${lunarDayName(ld)}`
+}
+
+export function findSolarForLunar(lm: number, ld: number, year: number): string | null {
+  for (let m = 0; m < 12; m++) {
+    const dim = new Date(year, m + 1, 0).getDate()
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const l = solarToLunar(ds)
+      if (l.month === lm && l.day === ld && !l.isLeap) return ds
+    }
+  }
+  return null
+}

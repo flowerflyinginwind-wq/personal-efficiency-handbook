@@ -49,6 +49,7 @@ export interface SpecialDate {
   monthDay: string
   yearly: boolean
   year?: number
+  isLunar?: boolean
 }
 
 export interface PendingItem {

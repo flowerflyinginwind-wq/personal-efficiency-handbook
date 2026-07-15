@@ -10,9 +10,14 @@
   <meta name="description" content="个人效率手册 — 任务打卡、特殊日子提醒、农历日历" />
   <link rel="manifest" href="manifest.json" />
   <title>个人效率手册</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root{--bg:#f4f5f7;--surface:#fff;--sidebar-bg:#16181d;--sidebar-hover:#22252c;--sidebar-active:#2a2e38;--text:#1a1d23;--text-secondary:#6b7280;--text-muted:#9ca3af;--accent:#0d9488;--accent-light:#ccfbf1;--accent-hover:#0f766e;--border:#e5e7eb;--danger:#ef4444;--radius:12px;--radius-sm:8px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 12px rgba(0,0,0,.08);--font:'Noto Sans SC',system-ui,sans-serif}
+    :root{--bg:#f4f5f7;--surface:#fff;--sidebar-bg:#16181d;--sidebar-hover:#22252c;--sidebar-active:#2a2e38;--text:#1a1d23;--text-secondary:#6b7280;--text-muted:#9ca3af;--accent:#0d9488;--accent-light:#ccfbf1;--accent-hover:#0f766e;--border:#e5e7eb;--danger:#ef4444;--holiday:#dc2626;--radius:12px;--radius-sm:8px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 12px rgba(0,0,0,.08);--font:system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif}
+    [data-theme="dark"]{--bg:#0f1117;--surface:#1a1d27;--sidebar-bg:#0a0c10;--sidebar-hover:#161920;--sidebar-active:#1f2430;--text:#e8eaed;--text-secondary:#9aa0a6;--text-muted:#6b7280;--accent:#2dd4bf;--accent-light:#134e4a;--accent-hover:#14b8a6;--border:#2d3340;--danger:#f87171;--holiday:#fca5a5;--shadow:0 1px 3px rgba(0,0,0,.3);--shadow-md:0 4px 12px rgba(0,0,0,.4)}
+    [data-theme="dark"] .task-item.done{background:#14532d;border-color:#166534}
+    [data-theme="dark"] .flower-badge{background:#3f1019;border-color:#7f1d1d}
+    [data-theme="dark"] .reward-toast{background:#3f1019;border-color:#7f1d1d}
+    [data-theme="dark"] .reminder-overdue,[data-theme="dark"] .special-today{background:#422006;border-color:#854d0e}
+    [data-theme="dark"] .reminder-toggle.on{background:#422006;border-color:#854d0e;color:#fcd34d}
     *{box-sizing:border-box;margin:0;padding:0}body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
     button,input,textarea,select{font-family:inherit;font-size:inherit}button{cursor:pointer;border:none;background:none}
     .app{display:flex;min-height:100vh}.sidebar{width:240px;background:var(--sidebar-bg);color:#e5e7eb;display:flex;flex-direction:column;padding:24px 16px;position:fixed;inset:0 auto 0 0}
@@ -112,13 +117,42 @@
     .special-list-title{font-weight:600}.special-list-date{font-size:.8rem;color:var(--accent)}.special-list-message{font-size:.85rem;color:var(--text-secondary);margin-top:6px;line-height:1.5}
     .special-message-input{width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;resize:vertical;outline:none;margin-top:8px;line-height:1.5}
     .special-preview-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem}.special-preview-msg{display:block;font-size:.85rem;color:var(--text-secondary);margin-top:4px}
+    .cal-holiday{font-size:.55rem;color:var(--holiday);line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mini-cal-day.has-holiday:not(.picked) .cal-lunar{color:var(--holiday)}
+    .week-day-holiday{font-size:.55rem;color:var(--holiday);margin-top:1px}
+    .template-chips,.preset-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .template-chip,.preset-chip{padding:6px 12px;font-size:.8rem;border:1px solid var(--border);border-radius:99px;background:var(--surface);color:var(--text-secondary)}
+    .template-chip:hover,.preset-chip:hover{border-color:var(--accent);color:var(--accent)}
+    .btn-edit{opacity:.5;font-size:.8rem;padding:2px 6px;color:var(--text-muted)}.btn-edit:hover{opacity:1;color:var(--accent)}
+    .trend-chart{display:flex;align-items:flex-end;gap:6px;height:100px;margin-top:8px}
+    .trend-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+    .trend-bar-fill{width:100%;background:var(--accent);border-radius:4px 4px 0 0;min-height:4px;opacity:.85}
+    .trend-bar-label{font-size:.65rem;color:var(--text-muted)}
+    .trend-bar-val{font-size:.7rem;font-weight:600;color:var(--accent)}
+    .theme-toggle{width:100%;padding:8px;font-size:.8rem;color:var(--text-muted);border-radius:var(--radius-sm);margin-bottom:8px}
+    .theme-toggle:hover{background:var(--sidebar-hover);color:#e5e7eb}
+    .toast-undo{margin-left:12px;padding:4px 10px;background:#fff;color:#e11d48;border-radius:var(--radius-sm);font-size:.8rem;font-weight:600}
+    [data-theme="dark"] .toast-undo{background:var(--accent);color:#fff}
+    .upcoming-special{list-style:none}.upcoming-special li{padding:10px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+    .upcoming-special-date{font-weight:600;color:var(--accent);font-size:.85rem}
+    .upcoming-special-title{font-weight:500;margin-top:2px}
+    .upcoming-special-msg{font-size:.8rem;color:var(--text-secondary);margin-top:4px}
+    .lunar-tag{font-size:.7rem;padding:2px 8px;border-radius:99px;background:var(--accent-light);color:var(--accent);margin-left:6px}
   </style>
 </head>
 <body>
 <div class="app" id="app"></div>
 <script>
 const STORAGE_KEY='efficiency-handbook-data';
+const SETTINGS_KEY='efficiency-handbook-settings';
 const TARGET_RATE=0.8;
+const SOLAR_HOLIDAYS={'01-01':'元旦','05-01':'劳动','10-01':'国庆'};
+const LUNAR_HOLIDAYS={'1-1':'春节','1-15':'元宵','2-2':'龙头','5-5':'端午','7-7':'七夕','8-15':'中秋','9-9':'重阳','12-8':'腊八'};
+const TASK_TEMPLATES=[
+  {id:'three',label:'📋 每日三件要事',tasks:[{title:'要事一',note:'最重要'},{title:'要事二',note:''},{title:'要事三',note:''}]},
+  {id:'morning',label:'🌅 晨间例行',tasks:[{title:'喝水一杯',note:''},{title:'拉伸 5 分钟',note:''},{title:'读 10 分钟',note:''}]},
+  {id:'evening',label:'🌙 晚间复盘',tasks:[{title:'回顾今日完成',note:''},{title:'写下明日计划',note:''}]},
+];
 const uid=()=>crypto.randomUUID();
 const todayStr=()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`};
 const getMonthDates=(y,m)=>Array.from({length:new Date(y,m+1,0).getDate()},(_,i)=>{const d=new Date(y,m,i+1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`});
@@ -138,6 +172,10 @@ function lDayName(d){return LDAY[d-1]||d+'日'}
 function formatLunarCell(ds){const l=solarToLunar(ds);return l.day===1?lMonthName(l.month,l.isLeap):lDayName(l.day)}
 function formatLunarFull(ds){const l=solarToLunar(ds);return '农历'+lMonthName(l.month,l.isLeap)+lDayName(l.day)}
 function formatSolarMonthLunarRange(y,m){const f=`${y}-${String(m+1).padStart(2,'0')}-01`,ld=new Date(y,m+1,0).getDate(),la=`${y}-${String(m+1).padStart(2,'0')}-${String(ld).padStart(2,'0')}`,m1=lMonthName(solarToLunar(f).month,solarToLunar(f).isLeap),m2=lMonthName(solarToLunar(la).month,solarToLunar(la).isLeap);return m1===m2?m1:m1+'～'+m2}
+function getHoliday(ds){const sh=SOLAR_HOLIDAYS[ds.slice(5,10)];if(sh)return sh;const l=solarToLunar(ds);if(l.isLeap)return null;return LUNAR_HOLIDAYS[`${l.month}-${l.day}`]||null}
+function findSolarForLunar(lm,ld,y){for(let m=0;m<12;m++){const dim=new Date(y,m+1,0).getDate();for(let d=1;d<=dim;d++){const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,l=solarToLunar(ds);if(l.month===lm&&l.day===ld&&!l.isLeap)return ds}}return null}
+function lunarMonthDayFromSolar(ds){const l=solarToLunar(ds);return `${String(l.month).padStart(2,'0')}-${String(l.day).padStart(2,'0')}`}
+function formatLunarMonthDay(md){const[lm,ld]=md.split('-').map(Number);return lMonthName(lm,false)+lDayName(ld)}
 const formatDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return d.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · '+formatLunarFull(`${y}-${m}-${day}`)};
 const weekdayLabel=s=>new Date(s+'T00:00:00').toLocaleDateString('zh-CN',{weekday:'short'});
 const formatShortDate=s=>{const d=new Date(s+'T00:00:00');return d.toLocaleDateString('zh-CN',{month:'short',day:'numeric',weekday:'short'})+'（'+formatLunarFull(s)+'）'};
@@ -151,10 +189,15 @@ function toggleCompletion(task,sched,action){const ex=task.completions.find(c=>c
 
 function getOverdueItems(tasks,today){const items=[];tasks.forEach(t=>{t.scheduledDates.forEach(d=>{if(d<today&&!isCompletedOn(t,d))items.push({task:t,scheduledDate:d})})});return items.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate))}
 function toMonthDay(d){return d.slice(5,10)}
-function matchesSpecial(sd,dateStr){const md=toMonthDay(dateStr),y=parseInt(dateStr.slice(0,4));return sd.yearly?sd.monthDay===md:sd.monthDay===md&&sd.year===y}
+function matchesSpecial(sd,dateStr){
+  if(sd.isLunar){const l=solarToLunar(dateStr),[lm,ld]=sd.monthDay.split('-').map(Number);if(sd.yearly)return l.month===lm&&l.day===ld&&!l.isLeap;return l.year===(sd.year||0)&&l.month===lm&&l.day===ld&&!l.isLeap}
+  const md=toMonthDay(dateStr),y=parseInt(dateStr.slice(0,4));return sd.yearly?sd.monthDay===md:sd.monthDay===md&&sd.year===y}
 function getSpecialForDate(sds,d){return(sds||[]).filter(sd=>matchesSpecial(sd,d))}
+function getUpcomingSpecial(sds,today,days=7){const res=[];for(let i=0;i<=days;i++){const d=shiftDate(today,i);getSpecialForDate(sds,d).forEach(sd=>{if(!res.some(x=>x.sd.id===sd.id&&x.date===d))res.push({sd,date:d,daysAway:i})})}return res.sort((a,b)=>a.date.localeCompare(b.date))}
 function getSpecialToday(sds,r,today){const res=getSpecialForDate(sds,today);if(r.specialAdvanceDays===1)getSpecialForDate(sds,shiftDate(today,1)).forEach(sd=>{if(!res.some(x=>x.id===sd.id))res.push(sd)});return res}
-function formatSpecialLabel(sd){const[mm,dd]=sd.monthDay.split('-'),y=sd.yearly?new Date().getFullYear():(sd.year||new Date().getFullYear()),solar=sd.yearly?`每年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`:`${sd.year} 年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`;return solar+'（'+formatLunarFull(`${y}-${sd.monthDay}`)+'）'}
+function formatSpecialLabel(sd){
+  if(sd.isLunar){const[lm,ld]=sd.monthDay.split('-').map(Number),lmd=formatLunarMonthDay(sd.monthDay),cy=new Date().getFullYear(),solar=findSolarForLunar(lm,ld,cy);const base=sd.yearly?`每年农历 ${lmd}`:`${sd.year} 年农历 ${lmd}`;return solar?`${base}（今年 ${new Date(solar+'T00:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric'})}）`:base}
+  const[mm,dd]=sd.monthDay.split('-'),y=sd.yearly?new Date().getFullYear():(sd.year||new Date().getFullYear()),solar=sd.yearly?`每年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`:`${sd.year} 年 ${parseInt(mm)} 月 ${parseInt(dd)} 日`;return solar+'（'+formatLunarFull(`${y}-${sd.monthDay}`)+'）'}
 function buildNotifyBody(overdue,special,today){const p=[];special.forEach(sd=>{const isT=matchesSpecial(sd,today);p.push(`${isT?'🎂':'📅 明天'} ${sd.title}${sd.message?'：'+sd.message:''}`)});if(overdue.length)p.push(`⚠️ 逾期 ${overdue.length} 项：`+overdue.map(i=>i.task.title).join('、'));return p.join('\n')||'暂无提醒'}
 function shouldNotifyNow(r){if(!r.enabled)return false;const today=todayStr();if(r.lastNotifiedDate===today)return false;const[h,m]=r.time.split(':').map(Number);const now=new Date();return now.getHours()*60+now.getMinutes()>=h*60+m}
 function sendNotify(title,body){if(!('Notification'in window)||Notification.permission!=='granted')return false;try{new Notification(title,{body,tag:'efficiency-handbook-reminder'});return true}catch{return false}}
@@ -175,35 +218,51 @@ function defaultData(){return{
   reviews:{weekly:[],monthly:[]},
 }}
 
-function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks:[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates:d.specialDates}}
+function normalizeData(p){const d=defaultData();if(!p)return d;const rem={...d.reminders,...(p.reminders||{})};if(rem.advanceDays!==undefined&&!rem.specialAdvanceDays)rem.specialAdvanceDays=rem.advanceDays;return{...d,...p,tasks:Array.isArray(p.tasks)?p.tasks:[],rewards:{totalFlowers:0,dayRewards:[],...(p.rewards||{})},reminders:rem,specialDates:Array.isArray(p.specialDates)?p.specialDates.map(s=>({isLunar:false,...s})):d.specialDates}}
 let data=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r)return normalizeData(JSON.parse(r))}catch(e){console.error(e)}return defaultData()})();
+let settings=(()=>{try{const r=localStorage.getItem(SETTINGS_KEY);if(r)return JSON.parse(r)}catch(e){}return{darkMode:false}})();
 let page='tasks',selectedDate=todayStr(),showForm=false,showSettings=false,showSpecialForm=false;
 let formTitle='',formNote='',pickDates=[todayStr()];
-let spTitle='',spMessage='',spDate=todayStr(),spYearly=true;
+let spTitle='',spMessage='',spDate=todayStr(),spYearly=true,spIsLunar=false;
+let editTaskId=null,editTitle='',editNote='',editPickDates=[],editCalYear=new Date().getFullYear(),editCalMonth=new Date().getMonth();
 let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
-let spCalYear=new Date().getFullYear(),spCalMonth=new Date().getMonth(),toast=null;
+let spCalYear=new Date().getFullYear(),spCalMonth=new Date().getMonth();
+let toast=null,undoState=null,undoTimer=null;
 
-function miniCalBlock(y,m,selected,isMulti,navPrev,navNext){
+function miniCalBlock(y,m,selected,isMulti,navPrev,navNext,mode){
   const monthDates=getMonthDates(y,m),firstDow=new Date(y,m,1).getDay(),pad=(firstDow+6)%7;
   const picked=d=>isMulti?selected.includes(d):d===selected;
-  const click=d=>isMulti?`pickDates.includes('${d}')?pickDates=pickDates.filter(x=>x!=='${d}'):pickDates=[...pickDates,'${d}'].sort();render()`:`spDate='${d}';render()`;
+  const click=d=>mode==='edit'?`editPickDates.includes('${d}')?editPickDates=editPickDates.filter(x=>x!=='${d}'):editPickDates=[...editPickDates,'${d}'].sort();render()`:mode==='sp'?`spDate='${d}';render()`:isMulti?`pickDates.includes('${d}')?pickDates=pickDates.filter(x=>x!=='${d}'):pickDates=[...pickDates,'${d}'].sort();render()`:`spDate='${d}';render()`;
   return `<div class="mini-cal-nav"><button onclick="${navPrev}">‹</button><span>${y} 年 ${m+1} 月<span class="cal-lunar-range">农历 ${formatSolarMonthLunarRange(y,m)}</span></span><button onclick="${navNext}">›</button></div>
-    <div class="mini-cal">${['一','二','三','四','五','六','日'].map(w=>`<span class="mini-cal-head">${w}</span>`).join('')}${Array(pad).fill('<span></span>').join('')}${monthDates.map(d=>`<button class="mini-cal-day ${picked(d)?'picked':''} ${d===todayStr()?'today':''}" onclick="${click(d)}"><span class="cal-solar">${parseInt(d.slice(8))}</span><span class="cal-lunar">${formatLunarCell(d)}</span></button>`).join('')}</div>`;
+    <div class="mini-cal">${['一','二','三','四','五','六','日'].map(w=>`<span class="mini-cal-head">${w}</span>`).join('')}${Array(pad).fill('<span></span>').join('')}${monthDates.map(d=>{const h=getHoliday(d);return`<button class="mini-cal-day ${picked(d)?'picked':''} ${d===todayStr()?'today':''} ${h?'has-holiday':''}" onclick="${click(d)}"><span class="cal-solar">${parseInt(d.slice(8))}</span><span class="cal-lunar">${formatLunarCell(d)}</span>${h?`<span class="cal-holiday">${h}</span>`:''}</button>`}).join('')}</div>`;
 }
 
 const save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
-const showToast=msg=>{toast=msg;render();setTimeout(()=>{toast=null;render()},3000)};
+const saveSettings=()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));document.documentElement.setAttribute('data-theme',settings.darkMode?'dark':'light');if(settings.darkMode)document.querySelector('meta[name="theme-color"]')?.setAttribute('content','#0a0c10');else document.querySelector('meta[name="theme-color"]')?.setAttribute('content','#16181d')};
+const vibrate=ms=>{try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}};
+const showToast=(msg,undo=false)=>{toast=undo?{msg,undo:true}:msg;render();if(!undo)setTimeout(()=>{toast=null;render()},3000)};
+const showUndoToast=msg=>{clearTimeout(undoTimer);showToast(msg,true);undoTimer=setTimeout(()=>{undoState=null;toast=null;render()},5000)};
+function undoDelete(){if(!undoState)return;if(undoState.type==='task'){data.tasks.splice(undoState.index,0,undoState.item);data.rewards=recalculateRewards(data.tasks)}else if(undoState.type==='special'){data.specialDates.splice(undoState.index,0,undoState.item)}undoState=null;toast=null;save();render()}
+function deleteTask(id){const idx=data.tasks.findIndex(t=>t.id===id);if(idx<0)return;undoState={type:'task',item:data.tasks[idx],index:idx};data.tasks=data.tasks.filter(t=>t.id!==id);data.rewards=recalculateRewards(data.tasks);save();showUndoToast('已删除任务')}
+function deleteSpecial(id){const idx=data.specialDates.findIndex(s=>s.id===id);if(idx<0)return;undoState={type:'special',item:data.specialDates[idx],index:idx};data.specialDates=data.specialDates.filter(s=>s.id!==id);save();showUndoToast('已删除特殊日子')}
+function startEditTask(t){editTaskId=t.id;editTitle=t.title;editNote=t.note||'';editPickDates=[...t.scheduledDates];const d=new Date((t.scheduledDates[0]||todayStr())+'T00:00:00');editCalYear=d.getFullYear();editCalMonth=d.getMonth();showForm=false;render()}
+function startEditTaskById(id){const t=data.tasks.find(x=>x.id===id);if(t)startEditTask(t)}
+function saveEditTask(){if(!editTaskId||!editTitle.trim()||!editPickDates.length)return;data.tasks=data.tasks.map(t=>t.id===editTaskId?{...t,title:editTitle.trim(),note:editNote.trim(),scheduledDates:[...editPickDates].sort()}:t);data.rewards=recalculateRewards(data.tasks);editTaskId=null;save();render()}
+function applyTemplate(tpl){const td=todayStr();tpl.tasks.forEach(x=>{data.tasks.push({id:uid(),title:x.title,note:x.note||'',scheduledDates:[td],completions:[],createdAt:td})});data.rewards=recalculateRewards(data.tasks);save();showToast(`已添加 ${tpl.tasks.length} 项任务`);render()}
+function scrollWeekToToday(){requestAnimationFrame(()=>{const el=document.querySelector('.week-day.today'),strip=document.querySelector('.week-strip');if(el&&strip)el.scrollIntoView({inline:'center',behavior:'smooth'})})}
+function toastHtml(){if(!toast)return'';if(typeof toast==='object'&&toast.undo)return`<div class="reward-toast">${toast.msg}<button class="toast-undo" onclick="undoDelete()">撤销</button></div>`;return`<div class="reward-toast">${toast}</div>`}
 
 const NAV=[
   {id:'tasks',label:'任务中心',icon:'📌'},{id:'special',label:'特殊日子',icon:'🎂'},{id:'dashboard',label:'总览',icon:'📊'},
 ];
 
 function handleToggle(taskId,schedDate){
+  const wasDone=data.tasks.find(t=>t.id===taskId)?.completions.some(c=>c.scheduledDate===schedDate);
   const prevFlowers=(data.rewards.dayRewards.find(r=>r.date===selectedDate)||{}).flowers||0;
   data.tasks=data.tasks.map(t=>t.id===taskId?toggleCompletion(t,schedDate,selectedDate):t);
   data.rewards=recalculateRewards(data.tasks);
   const newR=evaluateDayReward(data.tasks,selectedDate);
-  if(newR.flowers>prevFlowers&&newR.reasons.length)showToast('🌸 获得小红花！'+newR.reasons.join('、'));
+  if(!wasDone){vibrate(40);if(newR.flowers>prevFlowers&&newR.reasons.length)showToast('🌸 获得小红花！'+newR.reasons.join('、'))}
   save();render();
 }
 
@@ -212,7 +271,7 @@ function renderTasks(){
   const aheadTasks=data.tasks.filter(t=>!t.scheduledDates.includes(selectedDate)&&t.scheduledDates.some(d=>d>selectedDate&&!isCompletedOn(t,d)));
   const overdue=getOverdueItems(data.tasks,today);
 
-  return `${toast?`<div class="reward-toast">${toast}</div>`:''}
+  return `${toastHtml()}
     <header class="page-header task-header"><div><h2>任务中心</h2><p>创建任务、分配到日期、打卡跟踪进度</p></div>
       <div class="flower-badge">🌸 <span>${data.rewards.totalFlowers}</span></div></header>
     ${overdue.length?`<div class="card reminder-overdue"><div class="card-title">⚠️ 逾期任务<span class="badge badge-danger">${overdue.length} 项</span></div><ul class="task-list">${overdue.map(i=>`<li class="task-item task-overdue"><input type="checkbox" onchange="handleToggle('${i.task.id}','${i.scheduledDate}')"><div class="task-item-body"><span class="task-item-title">${i.task.title}</span><span class="task-item-note">原定 ${formatShortDate(i.scheduledDate)}</span></div><button class="btn-icon" style="opacity:1" onclick="selectedDate='${i.scheduledDate}';render()">→</button></li>`).join('')}</ul></div>`:''}
@@ -221,9 +280,10 @@ function renderTasks(){
       <button class="date-nav-today ${selectedDate===todayStr()?'active':''}" onclick="selectedDate=todayStr();render()">${formatShortDate(selectedDate)}${selectedDate===todayStr()?' (今天)':''}</button>
       <button class="date-nav-btn" onclick="selectedDate=shiftDate(selectedDate,1);render()">→</button>
     </div>
-    <div class="week-strip">${week.map(d=>{const s=getDayStats(data.tasks,d),hasR=data.rewards.dayRewards.some(r=>r.date===d);
-      return`<button class="week-day ${d===selectedDate?'selected':''} ${d===todayStr()?'today':''}" onclick="selectedDate='${d}';render()">
+    <div class="week-strip">${week.map(d=>{const s=getDayStats(data.tasks,d),hasR=data.rewards.dayRewards.some(r=>r.date===d),h=getHoliday(d);
+      return`<button class="week-day ${d===selectedDate?'selected':''} ${d===todayStr()?'today':''}" data-date="${d}" onclick="selectedDate='${d}';render()">
         <span class="week-day-label">${weekdayLabel(d)}</span><span class="week-day-num">${d.slice(8)}</span><span class="week-day-lunar">${formatLunarCell(d)}</span>
+        ${h?`<span class="week-day-holiday">${h}</span>`:''}
         ${s.total>0?`<span class="week-day-dots">${s.done}/${s.total}</span>`:''}${hasR?'<span class="week-day-flower">🌸</span>':''}</button>`}).join('')}</div>
     <div class="task-stats-bar">
       <div class="task-stat"><span class="task-stat-val">${stats.done}/${stats.total}</span><span class="task-stat-label">当日完成</span></div>
@@ -233,14 +293,18 @@ function renderTasks(){
     <div class="card"><div class="card-title">${selectedDate===todayStr()?'今日任务':formatShortDate(selectedDate)+' 的任务'}<span class="badge">${dayTasks.length} 项</span></div>
       ${dayTasks.length===0?'<p class="empty-hint">这一天还没有任务，点击下方添加</p>':`<ul class="task-list">${dayTasks.map(t=>{
         const done=isCompletedOn(t,selectedDate),comp=t.completions.find(c=>c.scheduledDate===selectedDate),early=done&&comp&&comp.completedDate<selectedDate;
+        if(editTaskId===t.id)return`<li class="task-item" style="flex-direction:column;align-items:stretch"><input class="inline-input" style="margin-bottom:8px" value="${editTitle}" oninput="editTitle=this.value" placeholder="任务名称"><input class="inline-input" style="margin-bottom:8px" value="${editNote}" oninput="editNote=this.value" placeholder="备注"><div class="card-title" style="font-size:.85rem">修改日期</div>${miniCalBlock(editCalYear,editCalMonth,editPickDates,true,'editCalMonth--;if(editCalMonth<0){editCalMonth=11;editCalYear--}render()','editCalMonth++;if(editCalMonth>11){editCalMonth=0;editCalYear++}render()','edit')}
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn-primary" onclick="saveEditTask()">保存</button><button class="btn-danger" onclick="editTaskId=null;render()">取消</button></div></li>`;
         return`<li class="task-item ${done?'done':''}"><input type="checkbox" ${done?'checked':''} onchange="handleToggle('${t.id}','${selectedDate}')">
           <div class="task-item-body"><span class="task-item-title">${t.title}</span>${t.note?`<span class="task-item-note">${t.note}</span>`:''}${early?'<span class="task-ahead-tag">超前完成</span>':''}</div>
-          <button class="btn-icon" onclick="data.tasks=data.tasks.filter(x=>x.id!=='${t.id}');data.rewards=recalculateRewards(data.tasks);save();render()">✕</button></li>`}).join('')}</ul>`}
+          <button class="btn-edit" onclick="startEditTaskById('${t.id}')">编辑</button>
+          <button class="btn-icon" onclick="deleteTask('${t.id}')">✕</button></li>`}).join('')}</ul>`}
     </div>
     ${aheadTasks.length?`<div class="card"><div class="card-title">可提前完成<span class="badge">超前有 🌸</span></div><ul class="task-list">${aheadTasks.map(t=>{
       const nd=t.scheduledDates.filter(d=>d>selectedDate&&!isCompletedOn(t,d)).sort()[0];if(!nd)return'';
       return`<li class="task-item"><input type="checkbox" onchange="handleToggle('${t.id}','${nd}')"><div class="task-item-body"><span class="task-item-title">${t.title}</span><span class="task-item-note">原定 ${formatShortDate(nd)}</span></div></li>`}).join('')}</ul></div>`:''}
     ${showForm?`<div class="card"><div class="card-title">新建任务</div>
+      <div class="template-chips">${TASK_TEMPLATES.map(t=>`<button class="template-chip" onclick="applyTemplate(TASK_TEMPLATES.find(x=>x.id==='${t.id}'))">${t.label}</button>`).join('')}</div>
       <input class="inline-input" style="margin-bottom:8px" value="${formTitle}" oninput="formTitle=this.value" placeholder="任务名称" autofocus>
       <input class="inline-input" style="margin-bottom:12px" value="${formNote}" oninput="formNote=this.value" placeholder="备注（可选）">
       <div class="card-title" style="font-size:.9rem">选择日期（点击多选）</div>
@@ -256,7 +320,7 @@ function renderSpecial(){
   const today=todayStr(),sds=data.specialDates||[],todaySp=getSpecialForDate(sds,today);
   const tomorrowSp=data.reminders.specialAdvanceDays===1?getSpecialForDate(sds,shiftDate(today,1)).filter(sd=>!matchesSpecial(sd,today)):[];
   const notifOk='Notification'in window&&Notification.permission==='granted';
-  return `${toast?`<div class="reward-toast">${toast}</div>`:''}
+  return `${toastHtml()}
     <header class="page-header"><h2>特殊日子</h2><p>生日、纪念日等重要日期，附带一段想说的话</p></header>
     <div class="reminder-settings-bar">
       <button class="reminder-toggle ${data.reminders.enabled?'on':''}" onclick="data.reminders.enabled=!data.reminders.enabled;save();render()">🔔 日期提醒 ${data.reminders.enabled?'开':'关'}</button>
@@ -272,29 +336,40 @@ function renderSpecial(){
     ${todaySp.length?`<div class="card special-today"><div class="card-title">🎉 今天是</div>${todaySp.map(sd=>`<div class="special-today-item"><div class="special-today-title">${sd.title}</div>${sd.message?`<p class="special-today-message">${sd.message}</p>`:''}</div>`).join('')}</div>`:''}
     ${tomorrowSp.length?`<div class="card"><div class="card-title">明天预告</div>${tomorrowSp.map(sd=>`<div class="special-preview-item"><span class="special-preview-title">${sd.title}</span>${sd.message?`<span class="special-preview-msg">${sd.message}</span>`:''}</div>`).join('')}</div>`:''}
     <div class="card"><div class="card-title">全部特殊日子<span class="badge">${sds.length} 个</span></div>
-      ${!sds.length?'<p class="empty-hint">还没有特殊日子，添加生日或纪念日吧</p>':`<ul class="special-list">${[...sds].sort((a,b)=>a.monthDay.localeCompare(b.monthDay)).map(sd=>`<li class="special-list-item"><span class="special-list-icon">${sd.yearly?'🎂':'📅'}</span><div class="special-list-body"><div class="special-list-title">${sd.title}</div><div class="special-list-date">${formatSpecialLabel(sd)}</div>${sd.message?`<p class="special-list-message">${sd.message}</p>`:''}</div><button class="btn-icon" style="opacity:1" onclick="data.specialDates=data.specialDates.filter(x=>x.id!=='${sd.id}');save();render()">✕</button></li>`).join('')}</ul>`}
+      ${!sds.length?'<p class="empty-hint">还没有特殊日子，添加生日或纪念日吧</p>':`<ul class="special-list">${[...sds].sort((a,b)=>a.monthDay.localeCompare(b.monthDay)).map(sd=>`<li class="special-list-item"><span class="special-list-icon">${sd.isLunar?'🌙':sd.yearly?'🎂':'📅'}</span><div class="special-list-body"><div class="special-list-title">${sd.title}${sd.isLunar?'<span class="lunar-tag">农历</span>':''}</div><div class="special-list-date">${formatSpecialLabel(sd)}</div>${sd.message?`<p class="special-list-message">${sd.message}</p>`:''}</div><button class="btn-icon" style="opacity:1" onclick="deleteSpecial('${sd.id}')">✕</button></li>`).join('')}</ul>`}
     </div>
     ${showSpecialForm?`<div class="card"><div class="card-title">添加特殊日子</div>
       <input class="inline-input" style="margin-bottom:8px" value="${spTitle}" oninput="spTitle=this.value" placeholder="名称，如：妈妈生日" autofocus>
       <div class="card-title" style="font-size:.9rem;margin-top:4px">选择日期</div>
-      ${miniCalBlock(spCalYear,spCalMonth,spDate,false,'spCalMonth--;if(spCalMonth<0){spCalMonth=11;spCalYear--}render()','spCalMonth++;if(spCalMonth>11){spCalMonth=0;spCalYear++}render()')}
-      <p class="pick-dates-hint">已选：${formatShortDate(spDate)}</p>
+      ${miniCalBlock(spCalYear,spCalMonth,spDate,false,'spCalMonth--;if(spCalMonth<0){spCalMonth=11;spCalYear--}render()','spCalMonth++;if(spCalMonth>11){spCalMonth=0;spCalYear++}render()','sp')}
+      <p class="pick-dates-hint">已选：${spIsLunar?('农历 '+formatLunarMonthDay(lunarMonthDayFromSolar(spDate))+'（参考公历 '+new Date(spDate+'T00:00:00').toLocaleDateString('zh-CN',{month:'long',day:'numeric'})+'）'):formatShortDate(spDate)}</p>
+      <label class="setting-row" style="border:none"><input type="checkbox" ${spIsLunar?'checked':''} onchange="spIsLunar=this.checked;render()"> 按农历（如农历生日）</label>
       <label class="setting-row" style="border:none"><input type="checkbox" ${spYearly?'checked':''} onchange="spYearly=this.checked;render()"> 每年重复（如生日、纪念日）</label>
       <textarea class="special-message-input" oninput="spMessage=this.value" placeholder="写一段想说的话，提醒时会一起显示…" rows="3">${spMessage}</textarea>
-      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" onclick="if(spTitle.trim()&&spDate){const md=spDate.slice(5,10),y=parseInt(spDate.slice(0,4));data.specialDates.push({id:uid(),title:spTitle.trim(),message:spMessage.trim(),monthDay:md,yearly:spYearly,year:spYearly?undefined:y});spTitle='';spMessage='';showSpecialForm=false;save();render()}">保存</button><button class="btn-danger" onclick="showSpecialForm=false;render()">取消</button></div></div>`
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" onclick="if(spTitle.trim()&&spDate){const md=spIsLunar?lunarMonthDayFromSolar(spDate):spDate.slice(5,10),ly=solarToLunar(spDate),y=spIsLunar&&!spYearly?ly.year:parseInt(spDate.slice(0,4));data.specialDates.push({id:uid(),title:spTitle.trim(),message:spMessage.trim(),monthDay:md,yearly:spYearly,year:spYearly?undefined:y,isLunar:spIsLunar});spTitle='';spMessage='';spIsLunar=false;showSpecialForm=false;save();render()}">保存</button><button class="btn-danger" onclick="showSpecialForm=false;render()">取消</button></div></div>`
     :`<button class="btn-add" onclick="showSpecialForm=true;const _d=new Date(spDate+'T00:00:00');spCalYear=_d.getFullYear();spCalMonth=_d.getMonth();render()">+ 添加特殊日子</button>`}`;
 }
 
 function renderDashboard(){
-  const ts=getDayStats(data.tasks,todayStr());
-  return`<header class="page-header"><h2>总览</h2><p>${formatDate(new Date())}</p></header>
+  const today=todayStr(),ts=getDayStats(data.tasks,today);
+  const weekDays=Array.from({length:7},(_,i)=>shiftDate(today,-6+i));
+  const weekStats=weekDays.map(d=>{const s=getDayStats(data.tasks,d);return{date:d,...s,pct:s.total?Math.round(s.rate*100):0}});
+  const maxPct=Math.max(...weekStats.map(s=>s.pct),1);
+  const recentFlowers=[...data.rewards.dayRewards].reverse().slice(0,7);
+  const upcoming=getUpcomingSpecial(data.specialDates||[],today,7).filter(x=>x.daysAway>0);
+  return`${toastHtml()}<header class="page-header"><h2>总览</h2><p>${formatDate(new Date())}</p></header>
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-value">${ts.done}/${ts.total}</div><div class="stat-label">今日任务</div></div>
       <div class="stat-card"><div class="stat-value">🌸 ${data.rewards.totalFlowers}</div><div class="stat-label">累计小红花</div></div>
       <div class="stat-card"><div class="stat-value">${ts.total?Math.round(ts.rate*100):0}%</div><div class="stat-label">今日完成度</div></div>
     </div>
+    <div class="card"><div class="card-title">近 7 日完成率</div><div class="trend-chart">${weekStats.map(s=>`<div class="trend-bar"><span class="trend-bar-val">${s.pct}%</span><div class="trend-bar-fill" style="height:${Math.max(4,s.pct/maxPct*80)}px"></div><span class="trend-bar-label">${s.date.slice(5)}</span></div>`).join('')}</div></div>
+    ${recentFlowers.length?`<div class="card"><div class="card-title">近 7 日小红花</div><ul class="reward-history">${recentFlowers.map(r=>`<li><span class="reward-date">${r.date.slice(5)}</span><span>${'🌸'.repeat(r.flowers)}</span><span class="reward-reason">${r.reasons.join('、')}</span></li>`).join('')}</ul></div>`:''}
+    ${upcoming.length?`<div class="card"><div class="card-title">即将到来<span class="badge">${upcoming.length}</span></div><ul class="upcoming-special">${upcoming.map(({sd,date,daysAway})=>`<li><div class="upcoming-special-date">${daysAway} 天后 · ${formatShortDate(date)}</div><div class="upcoming-special-title">${sd.title}${sd.isLunar?'<span class="lunar-tag">农历</span>':''}</div>${sd.message?`<div class="upcoming-special-msg">${sd.message}</div>`:''}</li>`).join('')}</ul></div>`:'<div class="card"><div class="card-title">即将到来</div><p class="empty-hint">未来 7 天没有特殊日子</p></div>'}
     <div class="card"><div class="card-title">快捷入口</div><div class="quick-links">
       <button class="quick-link" onclick="page='tasks';render()"><div style="font-size:1.5rem">📌</div><div>今日任务打卡</div></button>
+      <button class="quick-link" onclick="page='special';render()"><div style="font-size:1.5rem">🎂</div><div>特殊日子</div></button>
+      <button class="quick-link" onclick="settings.darkMode=!settings.darkMode;saveSettings();render()"><div style="font-size:1.5rem">${settings.darkMode?'☀️':'🌙'}</div><div>${settings.darkMode?'浅色模式':'深色模式'}</div></button>
     </div></div>`;
 }
 
@@ -306,10 +381,13 @@ function render(){
   document.getElementById('app').innerHTML=`
     <aside class="sidebar"><div class="sidebar-brand"><h1>效率手册</h1><p>Personal Efficiency Handbook</p></div>
       <nav>${NAV.map(n=>`<button class="nav-item ${page===n.id?'active':''}" onclick="page='${n.id}';render()"><span class="nav-icon">${n.icon}</span><span>${n.label}</span>${n.id==='special'&&sp>0?`<span class="nav-badge">${sp}</span>`:''}${n.id==='tasks'&&od>0?`<span class="nav-badge">${od}</span>`:''}</button>`).join('')}</nav>
-      <div class="sidebar-footer"><button class="btn-reset" onclick="if(confirm('恢复默认？')){data=defaultData();save();render()}">恢复默认数据</button></div>
+      <div class="sidebar-footer"><button class="theme-toggle" onclick="settings.darkMode=!settings.darkMode;saveSettings();render()">${settings.darkMode?'☀️ 浅色模式':'🌙 深色模式'}</button><button class="btn-reset" onclick="if(confirm('恢复默认？')){data=defaultData();save();render()}">恢复默认数据</button></div>
     </aside><main class="main">${ac>0&&page!=='tasks'&&page!=='special'?`<button class="reminder-bar" onclick="page='special';render()">🔔 ${sp>0?getSpecialForDate(data.specialDates,today).map(s=>s.title).join('、'):''}${sp>0&&od>0?' · ':''}${od>0?`逾期 ${od} 项任务`:''}</button>`:''}${(pages[page]||renderTasks)()}</main>`;
+  if(page==='tasks')scrollWeekToToday();
   }catch(e){console.error(e);document.getElementById('app').innerHTML=`<div style="padding:40px"><h2>加载出错</h2><p style="color:#dc2626">${e.message}</p><button class="btn-primary" onclick="localStorage.removeItem('${STORAGE_KEY}');location.reload()">清除数据并重试</button></div>`}
 }
+document.documentElement.setAttribute('data-theme',settings.darkMode?'dark':'light');
+saveSettings();
 render();
 tryNotify();
 setInterval(tryNotify,60000);

@@ -1,5 +1,6 @@
 import type { Task, ReminderSettings, PendingItem, SpecialDate } from '../types'
 import { isCompletedOn } from './tasks'
+import { formatLunarFull, formatLunarMonthDay, findSolarForLunar, solarToLunar } from './lunar'
 
 export const DEFAULT_REMINDERS: ReminderSettings = {
   enabled: true,
@@ -21,9 +22,19 @@ export function parseDateInput(dateStr: string): { monthDay: string; year: numbe
   return { monthDay: toMonthDay(dateStr), year: parseInt(dateStr.slice(0, 4), 10) }
 }
 
-import { formatLunarFull } from './lunar'
-
 export function formatSpecialDateLabel(sd: SpecialDate): string {
+  if (sd.isLunar) {
+    const [lm, ld] = sd.monthDay.split('-').map(Number)
+    const lmd = formatLunarMonthDay(sd.monthDay)
+    const cy = new Date().getFullYear()
+    const solar = findSolarForLunar(lm, ld, cy)
+    const base = sd.yearly ? `每年农历 ${lmd}` : `${sd.year} 年农历 ${lmd}`
+    if (solar) {
+      const d = new Date(solar + 'T00:00:00')
+      return `${base}（今年 ${d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}）`
+    }
+    return base
+  }
   const [mm, dd] = sd.monthDay.split('-')
   const y = sd.yearly ? new Date().getFullYear() : (sd.year ?? new Date().getFullYear())
   const dateStr = `${y}-${sd.monthDay}`
@@ -34,10 +45,33 @@ export function formatSpecialDateLabel(sd: SpecialDate): string {
 }
 
 export function matchesSpecialDate(sd: SpecialDate, dateStr: string): boolean {
+  if (sd.isLunar) {
+    const l = solarToLunar(dateStr)
+    const [lm, ld] = sd.monthDay.split('-').map(Number)
+    if (sd.yearly) return l.month === lm && l.day === ld && !l.isLeap
+    return l.year === (sd.year ?? 0) && l.month === lm && l.day === ld && !l.isLeap
+  }
   const monthDay = toMonthDay(dateStr)
   const year = parseInt(dateStr.slice(0, 4), 10)
   if (sd.yearly) return sd.monthDay === monthDay
   return sd.monthDay === monthDay && sd.year === year
+}
+
+export function getUpcomingSpecialDates(
+  specialDates: SpecialDate[],
+  today: string,
+  days = 7,
+): { sd: SpecialDate; date: string; daysAway: number }[] {
+  const res: { sd: SpecialDate; date: string; daysAway: number }[] = []
+  for (let i = 0; i <= days; i++) {
+    const d = shiftDateStr(today, i)
+    for (const sd of getSpecialDatesForDate(specialDates, d)) {
+      if (!res.some((x) => x.sd.id === sd.id && x.date === d)) {
+        res.push({ sd, date: d, daysAway: i })
+      }
+    }
+  }
+  return res.sort((a, b) => a.date.localeCompare(b.date))
 }
 
 export function getSpecialDatesForDate(
