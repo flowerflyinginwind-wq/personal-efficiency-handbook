@@ -203,14 +203,16 @@
     .interval-toggle{padding:7px 14px;border-radius:99px;border:1px solid var(--border);font-size:.72rem;font-weight:600;background:var(--surface-solid);flex-shrink:0}
     .interval-toggle.on{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
     @media(max-width:768px){
+      .app{flex-direction:column}
       .sidebar{width:100%;height:auto;position:fixed;bottom:0;left:0;right:0;top:auto;flex-direction:row;align-items:stretch;padding:0;padding-bottom:env(safe-area-inset-bottom);z-index:100;border-top:none;box-shadow:0 -4px 24px rgba(0,0,0,.15);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(18,24,32,.92)}
       [data-theme="dark"] .sidebar{background:rgba(8,10,15,.94)}
       .sidebar-brand,.sidebar-footer{display:none}
-      .sidebar nav{flex:1;display:flex;justify-content:space-around;gap:0;padding:6px 4px 4px}
-      .nav-item{flex:1;flex-direction:column;justify-content:center;gap:3px;padding:6px 2px;font-size:.62rem;text-align:center;min-height:52px;border-radius:12px;margin:0 2px}
+      .sidebar nav{flex:1;display:flex;flex-direction:row;flex-wrap:nowrap;justify-content:space-around;align-items:stretch;gap:0;padding:6px 6px 4px;width:100%}
+      .nav-item{flex:1;flex-direction:column;justify-content:center;align-items:center;gap:2px;padding:6px 4px;font-size:.62rem;text-align:center;min-height:52px;min-width:0;width:auto;border-radius:12px;margin:0;position:relative}
+      .nav-item .nav-label{display:block;line-height:1.2;white-space:nowrap}
       .nav-item.active{background:rgba(45,212,191,.2);box-shadow:inset 0 0 0 1px rgba(45,212,191,.35)}
-      .nav-item .nav-badge{top:0;right:calc(50% - 20px)}
-      .nav-icon{font-size:1.35rem}
+      .nav-item .nav-badge{top:2px;right:50%;transform:translateX(14px);margin-left:0}
+      .nav-icon{font-size:1.35rem;width:auto;line-height:1}
       .main{margin-left:0;margin-bottom:calc(68px + env(safe-area-inset-bottom));padding:18px 14px 24px}
       .page-header h2{font-size:1.45rem}
       .card{padding:16px 18px;border-radius:14px}
@@ -566,7 +568,7 @@ function render(){
   const activeIv=(data.intervalReminders||[]).filter(x=>x.enabled).length,ac=od+sp;
   document.getElementById('app').innerHTML=`
     <aside class="sidebar"><div class="sidebar-brand"><h1>效率手册</h1><p>Personal Efficiency Handbook</p></div>
-      <nav>${NAV.map(n=>`<button class="nav-item ${page===n.id?'active':''}" onclick="page='${n.id}';render()"><span class="nav-icon">${n.icon}</span><span>${n.label}</span>${n.id==='special'&&sp>0?`<span class="nav-badge">${sp}</span>`:''}${n.id==='tasks'&&od>0?`<span class="nav-badge">${od}</span>`:''}${n.id==='intervals'&&activeIv>0?`<span class="nav-badge" style="background:var(--accent)">${activeIv}</span>`:''}</button>`).join('')}</nav>
+      <nav>${NAV.map(n=>`<button class="nav-item ${page===n.id?'active':''}" onclick="page='${n.id}';render()"><span class="nav-icon">${n.icon}</span><span class="nav-label">${n.label}</span>${n.id==='special'&&sp>0?`<span class="nav-badge">${sp}</span>`:''}${n.id==='tasks'&&od>0?`<span class="nav-badge">${od}</span>`:''}${n.id==='intervals'&&activeIv>0?`<span class="nav-badge" style="background:var(--accent)">${activeIv}</span>`:''}</button>`).join('')}</nav>
       <div class="sidebar-footer"><button class="theme-toggle" onclick="settings.darkMode=!settings.darkMode;saveSettings();render()">${settings.darkMode?'☀️ 浅色模式':'🌙 深色模式'}</button><button class="btn-reset" onclick="if(confirm('恢复默认？')){data=defaultData();save();render()}">恢复默认数据</button></div>
     </aside><main class="main">${ac>0&&page!=='tasks'&&page!=='special'?`<button class="reminder-bar" onclick="page='special';render()">🔔 ${sp>0?getSpecialForDate(data.specialDates,today).map(s=>s.title).join('、'):''}${sp>0&&od>0?' · ':''}${od>0?`逾期 ${od} 项任务`:''}</button>`:''}${(pages[page]||renderTasks)()}</main>`;
   if(page==='tasks')scrollWeekToToday();
