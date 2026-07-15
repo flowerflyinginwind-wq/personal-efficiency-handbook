@@ -11,6 +11,8 @@ import {
   getOverdueTargets,
   hasAnythingToNotify,
 } from '../utils/reminders'
+import { getMonthDates, formatShortDate } from '../utils/tasks'
+import { formatLunarCell, formatSolarMonthLunarRange } from '../utils/lunar'
 import { todayStr } from '../hooks/useHandbook'
 
 const PRESETS = ['生日', '纪念日', '节日', '其他']
@@ -32,6 +34,10 @@ export function SpecialDates({
   const [notifStatus, setNotifStatus] = useState(
     () => ('Notification' in window ? Notification.permission : 'denied'),
   )
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() }
+  })
 
   const today = todayStr()
   const todaySpecial = getSpecialDatesForDate(data.specialDates, today)
@@ -110,6 +116,16 @@ export function SpecialDates({
 
   const applyPreset = (preset: string) => {
     if (preset !== '其他') setTitle(preset)
+  }
+
+  const monthDates = getMonthDates(calMonth.year, calMonth.month)
+  const firstDow = new Date(calMonth.year, calMonth.month, 1).getDay()
+  const pad = (firstDow + 6) % 7
+
+  const openForm = () => {
+    const d = new Date(`${date}T00:00:00`)
+    setCalMonth({ year: d.getFullYear(), month: d.getMonth() })
+    setShowForm(true)
   }
 
   return (
@@ -254,13 +270,58 @@ export function SpecialDates({
             placeholder="名称，如：妈妈生日"
             autoFocus
           />
-          <input
-            className="inline-input"
-            style={{ marginBottom: 8 }}
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <div className="card-title" style={{ fontSize: '0.9rem' }}>
+            选择日期
+          </div>
+          <div className="mini-cal-nav">
+            <button
+              onClick={() =>
+                setCalMonth((m) => {
+                  const d = new Date(m.year, m.month - 1, 1)
+                  return { year: d.getFullYear(), month: d.getMonth() }
+                })
+              }
+            >
+              ‹
+            </button>
+            <span>
+              {calMonth.year} 年 {calMonth.month + 1} 月
+              <span className="cal-lunar-range">
+                农历 {formatSolarMonthLunarRange(calMonth.year, calMonth.month)}
+              </span>
+            </span>
+            <button
+              onClick={() =>
+                setCalMonth((m) => {
+                  const d = new Date(m.year, m.month + 1, 1)
+                  return { year: d.getFullYear(), month: d.getMonth() }
+                })
+              }
+            >
+              ›
+            </button>
+          </div>
+          <div className="mini-cal">
+            {['一', '二', '三', '四', '五', '六', '日'].map((w) => (
+              <span key={w} className="mini-cal-head">
+                {w}
+              </span>
+            ))}
+            {Array.from({ length: pad }).map((_, i) => (
+              <span key={`pad-${i}`} />
+            ))}
+            {monthDates.map((d) => (
+              <button
+                key={d}
+                className={`mini-cal-day ${d === date ? 'picked' : ''} ${d === todayStr() ? 'today' : ''}`}
+                onClick={() => setDate(d)}
+              >
+                <span className="cal-solar">{parseInt(d.slice(8), 10)}</span>
+                <span className="cal-lunar">{formatLunarCell(d)}</span>
+              </button>
+            ))}
+          </div>
+          <p className="pick-dates-hint">已选：{formatShortDate(date)}</p>
           <label className="setting-row" style={{ border: 'none', padding: '8px 0' }}>
             <input type="checkbox" checked={yearly} onChange={(e) => setYearly(e.target.checked)} />
             每年重复（如生日、纪念日）
@@ -282,7 +343,7 @@ export function SpecialDates({
           </div>
         </div>
       ) : (
-        <button className="btn-add" onClick={() => setShowForm(true)}>
+        <button className="btn-add" onClick={openForm}>
           + 添加特殊日子
         </button>
       )}
