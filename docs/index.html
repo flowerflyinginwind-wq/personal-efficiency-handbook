@@ -333,6 +333,12 @@ function shouldIntervalNotify(iv,now=new Date()){if(!iv.enabled)return false;con
 function getNextIntervalLabel(iv){if(!iv.enabled)return'已暂停';const now=new Date(),nowMin=now.getHours()*60+now.getMinutes(),start=timeToMin(iv.startTime),end=timeToMin(iv.endTime);if(nowMin>end)return'今日时段已结束';if(nowMin<start)return`今日 ${iv.startTime} 起提醒`;if(!iv.lastNotifiedAt||localDateStr(new Date(iv.lastNotifiedAt))!==todayStr())return'等待首次提醒';const nextMs=new Date(iv.lastNotifiedAt).getTime()+iv.intervalMinutes*60000,next=new Date(nextMs);const nextMin=next.getHours()*60+next.getMinutes();if(nextMin>end)return'今日已无下次';return`下次约 ${String(next.getHours()).padStart(2,'0')}:${String(next.getMinutes()).padStart(2,'0')}`}
 function tryIntervalNotify(){if(!('Notification'in window)||Notification.permission!=='granted')return;const now=new Date();let changed=false;(data.intervalReminders||[]).forEach(iv=>{if(shouldIntervalNotify(iv,now)){if(sendNotify(`⏰ ${iv.title}`,iv.message||formatIntervalMin(iv.intervalMinutes),`efficiency-interval-${iv.id}`)){iv.lastNotifiedAt=now.toISOString();changed=true;vibrate(30)}}});if(changed)save()}
 function tryAllNotify(){tryNotify();tryIntervalNotify()}
+function dateAtLocalTime(dateStr,timeStr){const[h,m]=timeStr.split(':').map(Number),[y,mo,d]=dateStr.split('-').map(Number);return new Date(y,mo-1,d,h,m,0,0).getTime()}
+function computeIntervalSchedule(iv,daysAhead=2){const items=[],now=Date.now(),today=todayStr();for(let dayOffset=0;dayOffset<daysAhead;dayOffset++){const date=shiftDate(today,dayOffset);if(iv.weekdays&&!iv.weekdays.includes(weekdayIndex(date)))continue;const startMs=dateAtLocalTime(date,iv.startTime),endMs=dateAtLocalTime(date,iv.endTime);let t=startMs;if(iv.lastNotifiedAt){const last=new Date(iv.lastNotifiedAt).getTime();if(localDateStr(new Date(last))===date&&last>=startMs)t=last+iv.intervalMinutes*60000}while(t<=endMs&&items.length<48){if(t>now)items.push({tag:`efficiency-interval-${iv.id}-${t}`,title:`⏰ ${iv.title}`,body:iv.message||formatIntervalMin(iv.intervalMinutes),at:t,kind:'interval',id:iv.id});t+=iv.intervalMinutes*60000}}return items}
+function computeDailySchedule(){const r=data.reminders;if(!r.enabled)return[];const items=[],today=todayStr();for(let i=0;i<2;i++){const date=shiftDate(today,i),at=dateAtLocalTime(date,r.time);if(at>Date.now()&&!(i===0&&r.lastNotifiedDate===today))items.push({tag:`efficiency-daily-${date}`,title:'🔔 效率手册提醒',body:'到提醒时间了，打开查看今日任务与特殊日子',at,kind:'daily'})}return items}
+function computeAllScheduledNotifications(){if(!('Notification'in window)||Notification.permission!=='granted')return[];const items=[...computeDailySchedule()];(data.intervalReminders||[]).filter(iv=>iv.enabled).forEach(iv=>items.push(...computeIntervalSchedule(iv)));return items.sort((a,b)=>a.at-b.at).slice(0,64)}
+async function syncNotificationSchedule(){if(!('serviceWorker'in navigator)||Notification.permission!=='granted')return;try{const reg=await navigator.serviceWorker.ready;(reg.active||reg.waiting||reg.installing)?.postMessage({type:'SCHEDULE_NOTIFICATIONS',items:computeAllScheduledNotifications()})}catch(e){}}
+function requestNotifyPermission(){if(!('Notification'in window))return Promise.resolve('denied');if(Notification.permission==='granted')return syncNotificationSchedule().then(()=>'granted');if(Notification.permission==='denied')return Promise.resolve('denied');return Notification.requestPermission().then(p=>{if(p==='granted')syncNotificationSchedule();return p})}
 function alertCount(){const t=todayStr();return getOverdueItems(data.tasks,t).length+getSpecialForDate(data.specialDates||[],t).length}
 
 const today=todayStr(),tomorrow=shiftDate(today,1);
@@ -370,7 +376,7 @@ function miniCalBlock(y,m,selected,isMulti,navPrev,navNext,mode){
     <div class="mini-cal">${['一','二','三','四','五','六','日'].map(w=>`<span class="mini-cal-head">${w}</span>`).join('')}${Array(pad).fill('<span></span>').join('')}${monthDates.map(d=>{const h=getHoliday(d);return`<button class="mini-cal-day ${picked(d)?'picked':''} ${d===todayStr()?'today':''} ${h?'has-holiday':''}" onclick="${click(d)}"><span class="cal-solar">${parseInt(d.slice(8))}</span><span class="cal-lunar">${formatLunarCell(d)}</span>${h?`<span class="cal-holiday">${h}</span>`:''}</button>`}).join('')}</div>`;
 }
 
-const save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+const save=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(data));syncNotificationSchedule()};
 const saveSettings=()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));document.documentElement.setAttribute('data-theme',settings.darkMode?'dark':'light');const c=settings.darkMode?'#0b0e14':'#0d9488';document.querySelector('meta[name="theme-color"]')?.setAttribute('content',c)};
 const vibrate=ms=>{try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}};
 const showToast=(msg,undo=false)=>{toast=undo?{msg,undo:true}:msg;render();if(!undo)setTimeout(()=>{toast=null;render()},3000)};
@@ -480,7 +486,7 @@ function renderSpecial(){
     <div class="reminder-settings-bar">
       <button class="reminder-toggle ${data.reminders.enabled?'on':''}" onclick="data.reminders.enabled=!data.reminders.enabled;save();render()">🔔 日期提醒 ${data.reminders.enabled?'开':'关'}</button>
       <button class="reminder-settings-btn" onclick="showSettings=!showSettings;render()">提醒设置</button>
-      ${!notifOk?`<button class="btn-primary" style="font-size:.8rem;padding:6px 12px" onclick="Notification.requestPermission().then(()=>render())">允许通知</button>`:''}
+      ${!notifOk?`<button class="btn-primary" style="font-size:.8rem;padding:6px 12px" onclick="requestNotifyPermission().then(()=>render())">允许通知</button>`:''}
     </div>
     ${showSettings?`<div class="card"><div class="card-title">提醒设置</div>
       <div class="setting-row"><label>每日提醒时间</label><input type="time" value="${data.reminders.time}" onchange="data.reminders.time=this.value;data.reminders.lastNotifiedDate=null;save();render()"></div>
@@ -510,10 +516,10 @@ function renderIntervals(){
   return`${toastHtml()}
     <header class="page-header"><h2>定时提醒</h2><p>按时间周期重复提醒，如喝水、护眼、起来活动</p></header>
     <div class="reminder-settings-bar">
-      ${!notifOk?`<button class="btn-primary" style="font-size:.8rem;padding:6px 12px" onclick="Notification.requestPermission().then(()=>render())">允许通知</button>`:'<span class="setting-hint" style="margin:0">✅ 通知已开启</span>'}
+      ${!notifOk?`<button class="btn-primary" style="font-size:.8rem;padding:6px 12px" onclick="requestNotifyPermission().then(()=>render())">允许通知</button>`:'<span class="setting-hint" style="margin:0">✅ 通知已开启</span>'}
       <button class="btn-add" style="margin:0" onclick="const iv=data.intervalReminders[0];if(iv&&sendNotify('⏰ 测试提醒',iv.message||iv.title,'efficiency-interval-test')){showToast('已发送测试通知')}else{showToast('请先添加提醒并允许通知')}">测试通知</button>
     </div>
-    <div class="card"><p class="setting-hint">在设定的时段内，每隔一段时间推送提醒。请允许浏览器通知；添加到主屏幕后体验更好。页面关闭后 iOS 可能无法准时提醒。</p></div>
+    <div class="card"><p class="setting-hint">按手机本地时间预约系统通知，无需联网；Android 添加到主屏幕后，即使关闭页面也能准时提醒。iOS 对后台通知限制较多，建议保持 App 在前台或近期打开过。</p></div>
     <div class="card"><div class="card-title">我的定时提醒<span class="badge">${ivs.length} 个</span></div>
       ${!ivs.length?'<p class="empty-hint">还没有定时提醒，添加一个吧</p>':`<ul class="interval-list">${ivs.map(iv=>`<li class="interval-item ${iv.enabled?'':'off'}"><button class="interval-toggle ${iv.enabled?'on':''}" onclick="const x=data.intervalReminders.find(i=>i.id==='${iv.id}');x.enabled=!x.enabled;if(!x.enabled)x.lastNotifiedAt=null;save();render()">${iv.enabled?'开':'关'}</button><div class="interval-item-body"><div class="interval-item-title">⏰ ${iv.title}<span class="repeat-tag">${formatIntervalMin(iv.intervalMinutes)}</span></div><div class="interval-meta">${iv.startTime} – ${iv.endTime}${iv.message?` · ${iv.message}`:''}</div><div class="interval-next">${getNextIntervalLabel(iv)}</div></div><button class="btn-icon" style="opacity:1" onclick="deleteInterval('${iv.id}')">✕</button></li>`).join('')}</ul>`}
     </div>
@@ -581,7 +587,7 @@ tryAllNotify();
 setInterval(tryAllNotify,30000);
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(()=>syncNotificationSchedule()).catch(()=>{});
   });
 }
 </script>
