@@ -2,7 +2,7 @@
   "name": "个人效率手册",
   "short_name": "效率手册",
   "description": "任务打卡、特殊日子提醒、农历日历",
-  "start_url": "./",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#eef2f6",
   "theme_color": "#0d9488",
